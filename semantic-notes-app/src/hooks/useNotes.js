@@ -27,6 +27,31 @@ function saveToStorage(notes) {
   }
 }
 
+function generateRandomId() {
+  return Date.now() + Math.floor(Math.random() * 100000);
+}
+
+function normalizeNote(n) {
+  if (typeof n !== 'object' || n === null) {
+    throw new Error('Invalid note format');
+  }
+  const title = String(n.title ?? '').trim();
+  const content = String(n.content ?? '').trim();
+  if (!title || !content) {
+    throw new Error('Each note must have title and content');
+  }
+  const tags = n.tags != null ? String(n.tags) : '';
+  let id = n.id;
+  if (id == null || (typeof id !== 'number' && typeof id !== 'string') || !Number.isFinite(Number(id))) {
+    id = generateRandomId();
+  } else {
+    id = Number(id);
+  }
+  const createdAt = n.createdAt ? new Date(n.createdAt).toISOString() : new Date().toISOString();
+  const updatedAt = n.updatedAt ? new Date(n.updatedAt).toISOString() : createdAt;
+  return { id, title, content, tags, createdAt, updatedAt };
+}
+
 export function useNotes() {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +63,7 @@ export function useNotes() {
   }, []);
 
   useEffect(() => {
-    if (!loading && notes.length > 0) {
+    if (!loading) {
       try {
         saveToStorage(notes);
         setError(null);
@@ -74,7 +99,37 @@ export function useNotes() {
   const deleteNote = useCallback((index) => {
     setNotes(prev => prev.filter((_, i) => i !== index));
   }, []);
-
+  
+  const importNotes = useCallback((incomingNotes, mode = 'merge') => {
+    if (!Array.isArray(incomingNotes)) {
+      throw new Error('Invalid import format: expected notes array');
+    }
+    const normalized = incomingNotes.map(n => normalizeNote(n));
+    if (mode === 'replace') {
+      setNotes(normalized);
+      return { imported: normalized.length, mode };
+    }
+    if (mode === 'merge') {
+      setNotes(prev => {
+        const existingIds = new Set(prev.map(n => n.id));
+        const merged = [...prev];
+        for (const note of normalized) {
+          let id = note.id;
+          if (existingIds.has(id)) {
+            do {
+              id = generateRandomId();
+            } while (existingIds.has(id));
+          }
+          existingIds.add(id);
+          merged.push({ ...note, id });
+        }
+        return merged;
+      });
+      return { imported: normalized.length, mode };
+    }
+    throw new Error('Invalid import mode');
+  }, []);
+  
   const searchNotes = useCallback((term) => {
     if (!term) return notes;
     const lower = term.toLowerCase();
@@ -146,6 +201,7 @@ export function useNotes() {
     searchNotes,
     getAllTags,
     exportNotes,
+    importNotes,
     getStats
   };
 }

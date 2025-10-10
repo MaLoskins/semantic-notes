@@ -5,6 +5,7 @@ import GraphVisualization from './components/GraphVisualization';
 import { useNotes } from './hooks/useNotes';
 import apiService from './services/api';
 import './App.css';
+import ImportConfirmModal from './components/ImportConfirmModal';
 
 const GRAPH_UPDATE_DEBOUNCE = 500;
 
@@ -17,7 +18,8 @@ export default function App() {
     updateNote,
     deleteNote,
     getStats,
-    exportNotes
+    exportNotes,
+    importNotes
   } = useNotes();
 
   const [selectedNote, setSelectedNote] = useState(null);
@@ -29,9 +31,13 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [pendingImportedNotes, setPendingImportedNotes] = useState([]);
+  const [successMessage, setSuccessMessage] = useState('');
   
   const graphRef = useRef(null);
   const updateTimerRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   // Check backend connection
   useEffect(() => {
@@ -50,7 +56,14 @@ export default function App() {
     const interval = setInterval(checkConnection, 10000);
     return () => clearInterval(interval);
   }, []);
-
+ 
+  // Auto-clear success messages
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = setTimeout(() => setSuccessMessage(''), 4000);
+    return () => clearTimeout(t);
+  }, [successMessage]);
+ 
   // Update dimensions on resize
   useEffect(() => {
     const updateDimensions = () => {
@@ -151,7 +164,85 @@ export default function App() {
     setIsCreating(false);
     setEditingNote(null);
   }, []);
-
+ 
+  const handleImportClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+ 
+  const handleFileSelected = useCallback((e) => {
+    try {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.json')) {
+        setError('Please select a JSON file');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || '');
+          const parsed = JSON.parse(text);
+          const incoming = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.notes) ? parsed.notes : null);
+          if (!incoming) {
+            throw new Error('Invalid file format. Expected { "notes": [...] }');
+          }
+          if (!Array.isArray(incoming)) {
+            throw new Error('Invalid notes format in file');
+          }
+          if (incoming.length === 0) {
+            setError('No notes found in file');
+            e.target.value = '';
+            return;
+          }
+          setPendingImportedNotes(incoming);
+          setShowImportModal(true);
+          setError(null);
+        } catch (err) {
+          console.error('Import parse error:', err);
+          setError(`Import failed: ${err.message}`);
+        } finally {
+          e.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        setError('Failed to read file');
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+      if (e?.target) e.target.value = '';
+    }
+  }, []);
+ 
+  const confirmReplace = useCallback(() => {
+    try {
+      const res = importNotes(pendingImportedNotes, 'replace');
+      setSuccessMessage(`Imported ${res.imported} notes successfully`);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    } finally {
+      setShowImportModal(false);
+      setPendingImportedNotes([]);
+      setSelectedNote(null);
+      setEditingNote(null);
+      setIsCreating(false);
+    }
+  }, [importNotes, pendingImportedNotes]);
+ 
+  const confirmMerge = useCallback(() => {
+    try {
+      const res = importNotes(pendingImportedNotes, 'merge');
+      setSuccessMessage(`Imported ${res.imported} notes successfully`);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    } finally {
+      setShowImportModal(false);
+      setPendingImportedNotes([]);
+    }
+  }, [importNotes, pendingImportedNotes]);
+ 
   const stats = getStats();
 
   return (
@@ -175,13 +266,28 @@ export default function App() {
             New Note
           </button>
 
-          <button 
-            onClick={exportNotes} 
-            className="btn btn-secondary btn-icon" 
+          <button
+            onClick={exportNotes}
+            className="btn btn-secondary btn-icon"
             title="Export Notes"
           >
             ↓
           </button>
+ 
+          <button
+            onClick={handleImportClick}
+            className="btn btn-secondary btn-icon"
+            title="Import Notes"
+          >
+            ↑
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,application/json"
+            style={{ display: 'none' }}
+            onChange={handleFileSelected}
+          />
 
           <div className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
             <span className={`status-indicator ${connected ? '' : 'disconnected'}`} />
@@ -195,7 +301,13 @@ export default function App() {
           ⚠ {error || notesError}
         </div>
       )}
-
+ 
+      {successMessage && (
+        <div className="success-banner">
+          ✓ {successMessage}
+        </div>
+      )}
+ 
       <div className="main-content">
         <div className="sidebar">
           {isCreating || editingNote ? (
@@ -279,6 +391,17 @@ export default function App() {
           )}
         </div>
       </div>
+ 
+      <ImportConfirmModal
+        isOpen={showImportModal}
+        count={pendingImportedNotes.length}
+        onReplace={confirmReplace}
+        onMerge={confirmMerge}
+        onCancel={() => {
+          setShowImportModal(false);
+          setPendingImportedNotes([]);
+        }}
+      />
     </div>
   );
 }

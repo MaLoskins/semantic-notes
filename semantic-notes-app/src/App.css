@@ -699,3 +699,67 @@ body {
     width: 200px;
   }
 }
+/* Import Modal and Success Banner */
+.success-banner {
+  background: rgba(16, 185, 129, 0.12);
+  border-bottom: 1px solid var(--accent-success);
+  color: var(--accent-success);
+  padding: 0.75rem 2rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: min(520px, 92vw);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  color: var(--text-primary);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 1rem 1.25rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.modal-list {
+  margin: 0.5rem 0 0 1rem;
+  color: var(--text-muted);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
