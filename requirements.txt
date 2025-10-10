@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sentence-transformers
+scikit-learn
+numpy
+scipy
+networkx
+umap-learn
+cachetools
+pydantic
