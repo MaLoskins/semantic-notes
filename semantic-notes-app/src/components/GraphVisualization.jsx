@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import GraphControlsPanel from './GraphControlsPanel';
+import ExportGraphModal from './ExportGraphModal';
+import ToastNotification from './ToastNotification';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
 
@@ -21,6 +23,12 @@ export default function GraphVisualization({
   const simulationRef = useRef(null);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [isRunning, setIsRunning] = useState(true);
+
+  // Export modal and notifications
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportTransform, setExportTransform] = useState({ x: 0, y: 0, k: 1 });
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
     if (!graphData || !svgRef.current) return;
@@ -214,6 +222,21 @@ export default function GraphVisualization({
     }
   };
 
+  const handleOpenExport = () => {
+    try {
+      const t = d3.zoomTransform(svgRef.current);
+      setExportTransform({ x: t.x, y: t.y, k: t.k });
+    } catch {
+      setExportTransform({ x: 0, y: 0, k: 1 });
+    }
+    setExportOpen(true);
+  };
+
+  const handleNotify = (msg) => {
+    setToastMessage(msg);
+    setToastOpen(true);
+  };
+
   return (
     <div className="graph-visualization">
       <svg
@@ -242,6 +265,9 @@ export default function GraphVisualization({
         <button onClick={handleToggleSimulation} className="control-btn" title="Toggle Physics">
           {isRunning ? '❚❚' : '▶'}
         </button>
+        <button onClick={handleOpenExport} className="control-btn" title="Export Graph">
+          ⤓
+        </button>
       </div>
 
       {hoveredNode && (
@@ -253,6 +279,23 @@ export default function GraphVisualization({
           </div>
         </div>
       )}
+
+      <ExportGraphModal
+        isOpen={exportOpen}
+        onClose={() => setExportOpen(false)}
+        svgRef={svgRef}
+        graphData={graphData}
+        params={controlsParams}
+        transform={exportTransform}
+        onNotify={handleNotify}
+      />
+
+      <ToastNotification
+        isOpen={toastOpen}
+        message={toastMessage}
+        onClose={() => setToastOpen(false)}
+        duration={4000}
+      />
     </div>
   );
 }
