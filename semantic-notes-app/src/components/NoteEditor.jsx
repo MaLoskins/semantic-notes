@@ -1,42 +1,48 @@
-// components/NoteEditor.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function NoteEditor({ note, onSave, onCancel }) {
-  const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    tags: ''
-  });
-  
-  const titleRef = useRef(null);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [tags, setTags] = useState('');
 
   useEffect(() => {
-    setFormData({
-      title: note?.title || '',
-      content: note?.content || '',
-      tags: note?.tags || ''
-    });
-    titleRef.current?.focus();
+    if (note) {
+      setTitle(note.title || '');
+      setContent(note.content || '');
+      setTags(note.tags || '');
+    } else {
+      setTitle('');
+      setContent('');
+      setTags('');
+    }
   }, [note]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    if (!formData.title.trim() || !formData.content.trim()) {
+    if (!title.trim()) {
+      alert('Title is required');
+      return;
+    }
+    
+    if (!content.trim()) {
+      alert('Content is required');
       return;
     }
 
-    onSave({
+    const noteData = {
       ...note,
-      ...formData,
-      title: formData.title.trim(),
-      content: formData.content.trim(),
-      tags: formData.tags.trim()
-    });
-  };
+      title: title.trim(),
+      content: content.trim(),
+      tags: tags.trim(),
+      updatedAt: new Date().toISOString()
+    };
 
-  const handleChange = (field) => (e) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
+    if (!note?.id) {
+      noteData.createdAt = new Date().toISOString();
+    }
+
+    onSave(noteData);
   };
 
   const handleKeyDown = (e) => {
@@ -47,8 +53,7 @@ export default function NoteEditor({ note, onSave, onCancel }) {
     }
   };
 
-  const isEditing = Boolean(note?.id);
-  const isValid = formData.title.trim() && formData.content.trim();
+  const isEditing = note?.id !== undefined;
 
   return (
     <div className="note-editor">
@@ -58,62 +63,49 @@ export default function NoteEditor({ note, onSave, onCancel }) {
       
       <form onSubmit={handleSubmit} className="editor-form">
         <div className="form-group">
-          <label htmlFor="title" className="form-label">Title</label>
+          <label className="form-label">Title</label>
           <input
-            id="title"
-            ref={titleRef}
             type="text"
-            placeholder="Enter note title"
-            value={formData.title}
-            onChange={handleChange('title')}
+            placeholder="Note title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="note-input"
-            required
+            className="form-input"
+            autoFocus
           />
         </div>
 
-        <div className="form-group">
-          <label htmlFor="content" className="form-label">Content</label>
+        <div className="form-group" style={{ flex: 1 }}>
+          <label className="form-label">Content</label>
           <textarea
-            id="content"
-            placeholder="Write your note content here"
-            value={formData.content}
-            onChange={handleChange('content')}
+            placeholder="Write your note here..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="note-input note-content-input"
-            required
+            className="form-input form-textarea"
           />
           <div className="char-count">
-            {formData.content.length} characters
+            {content.length} characters
           </div>
         </div>
 
         <div className="form-group">
-          <label htmlFor="tags" className="form-label">Tags</label>
+          <label className="form-label">Tags</label>
           <input
-            id="tags"
             type="text"
-            placeholder="Enter tags separated by commas"
-            value={formData.tags}
-            onChange={handleChange('tags')}
+            placeholder="comma, separated, tags"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="note-input"
+            className="form-input"
           />
         </div>
 
         <div className="editor-actions">
-          <button 
-            type="submit" 
-            className="btn btn-primary"
-            disabled={!isValid}
-          >
+          <button type="submit" className="btn btn-primary">
             {isEditing ? 'Update' : 'Create'}
           </button>
-          <button 
-            type="button" 
-            onClick={onCancel} 
-            className="btn btn-secondary"
-          >
+          <button type="button" onClick={onCancel} className="btn btn-secondary">
             Cancel
           </button>
           <span className="keyboard-hint">

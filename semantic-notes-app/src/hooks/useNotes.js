@@ -1,39 +1,49 @@
-// hooks/useNotes.js
 import { useState, useEffect, useCallback } from 'react';
 
 const STORAGE_KEY = 'semantic-notes-data';
+
+function loadFromStorage() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.notes || [];
+    }
+  } catch (err) {
+    console.error('Failed to load notes:', err);
+  }
+  return [];
+}
+
+function saveToStorage(notes) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      notes,
+      lastUpdated: new Date().toISOString()
+    }));
+  } catch (err) {
+    console.error('Failed to save notes:', err);
+    throw new Error('Storage quota exceeded');
+  }
+}
 
 export function useNotes() {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load from localStorage
   useEffect(() => {
-    try {
-      const storedData = localStorage.getItem(STORAGE_KEY);
-      if (storedData) {
-        const { notes = [] } = JSON.parse(storedData);
-        setNotes(notes);
-      }
-    } catch (err) {
-      console.error('Failed to load notes:', err);
-      setError('Failed to load saved notes');
-    } finally {
-      setLoading(false);
-    }
+    setNotes(loadFromStorage());
+    setLoading(false);
   }, []);
 
-  // Save to localStorage
   useEffect(() => {
     if (!loading && notes.length > 0) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-          notes,
-          lastUpdated: new Date().toISOString()
-        }));
+        saveToStorage(notes);
+        setError(null);
       } catch (err) {
-        console.error('Failed to save notes:', err);
+        setError(err.message);
       }
     }
   }, [notes, loading]);
@@ -65,6 +75,29 @@ export function useNotes() {
     setNotes(prev => prev.filter((_, i) => i !== index));
   }, []);
 
+  const searchNotes = useCallback((term) => {
+    if (!term) return notes;
+    const lower = term.toLowerCase();
+    return notes.filter(note => 
+      note.title.toLowerCase().includes(lower) ||
+      note.content.toLowerCase().includes(lower) ||
+      (note.tags && note.tags.toLowerCase().includes(lower))
+    );
+  }, [notes]);
+
+  const getAllTags = useCallback(() => {
+    const tagSet = new Set();
+    notes.forEach(note => {
+      if (note.tags) {
+        note.tags.split(',').forEach(tag => {
+          const trimmed = tag.trim();
+          if (trimmed) tagSet.add(trimmed);
+        });
+      }
+    });
+    return Array.from(tagSet).sort();
+  }, [notes]);
+
   const exportNotes = useCallback(() => {
     const data = {
       notes,
@@ -87,26 +120,21 @@ export function useNotes() {
   }, [notes]);
 
   const getStats = useCallback(() => {
+    const totalNotes = notes.length;
     const totalWords = notes.reduce((sum, note) => 
-      sum + note.content.split(/\s+/).filter(Boolean).length, 0
+      sum + note.content.split(/\s+/).filter(w => w).length, 0
     );
-    
-    const tagsSet = new Set();
-    notes.forEach(note => {
-      if (note.tags) {
-        note.tags.split(',').forEach(tag => {
-          const trimmed = tag.trim();
-          if (trimmed) tagsSet.add(trimmed);
-        });
-      }
-    });
+    const totalChars = notes.reduce((sum, note) => sum + note.content.length, 0);
+    const tags = getAllTags();
     
     return {
-      totalNotes: notes.length,
+      totalNotes,
       totalWords,
-      totalTags: tagsSet.size
+      totalChars,
+      totalTags: tags.length,
+      averageNoteLength: totalNotes > 0 ? Math.round(totalChars / totalNotes) : 0
     };
-  }, [notes]);
+  }, [notes, getAllTags]);
 
   return {
     notes,
@@ -115,8 +143,9 @@ export function useNotes() {
     addNote,
     updateNote,
     deleteNote,
-    getStats,
+    searchNotes,
+    getAllTags,
     exportNotes,
-    setError
+    getStats
   };
 }

@@ -1,24 +1,28 @@
-// services/api.js
 class APIService {
   constructor(baseUrl = 'http://localhost:8000') {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
   async request(endpoint, options = {}) {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      ...options
-    });
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        ...options
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Request failed: ${response.status} - ${errorText}`);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API Error [${endpoint}]:`, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   async checkHealth() {
@@ -29,15 +33,48 @@ class APIService {
     return this.request('/api/stats');
   }
 
-  async buildGraph(params) {
-    const { mode = 'knn', ...restParams } = params;
-    
+  async embedDocuments(documents) {
+    if (!documents?.length) {
+      throw new Error('No documents provided');
+    }
+    return this.request('/api/embed', {
+      method: 'POST',
+      body: JSON.stringify({ documents })
+    });
+  }
+
+  async buildGraph({
+    documents,
+    labels = null,
+    mode = 'knn',
+    top_k = 2,
+    threshold = 0.3,
+    dr_method = 'pca',
+    n_components = 2,
+    cluster = 'none',
+    n_clusters = null,
+    include_embeddings = false
+  }) {
+    if (!documents?.length) {
+      throw new Error('No documents provided');
+    }
+
     const payload = {
-      ...restParams,
-      ...(mode === 'knn' 
-        ? { top_k: restParams.top_k || 2 }
-        : { threshold: restParams.threshold || 0.3 })
+      documents,
+      dr_method,
+      n_components,
+      cluster,
+      include_embeddings
     };
+
+    if (labels) payload.labels = labels;
+    if (n_clusters) payload.n_clusters = n_clusters;
+
+    if (mode === 'knn') {
+      payload.top_k = top_k;
+    } else {
+      payload.threshold = threshold;
+    }
 
     return this.request('/api/graph', {
       method: 'POST',
@@ -46,4 +83,7 @@ class APIService {
   }
 }
 
-export default new APIService();
+const apiService = new APIService();
+
+export default apiService;
+export { APIService };

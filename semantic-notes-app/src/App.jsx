@@ -1,32 +1,12 @@
-// App.jsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import NoteEditor from './components/NoteEditor';
 import NotesList from './components/NotesList';
 import GraphVisualization from './components/GraphVisualization';
 import { useNotes } from './hooks/useNotes';
-import { useGraph } from './hooks/useGraph';
 import apiService from './services/api';
 import './App.css';
 
-// Icons as simple SVG components
-const PlusIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-  </svg>
-);
-
-const ExportIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M8 10V2m0 0L5 5m3-3l3 3M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3" 
-          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-  </svg>
-);
-
-const SearchIcon = () => (
-  <svg className="search-icon" viewBox="0 0 16 16" fill="currentColor">
-    <path d="M7 1a6 6 0 104.472 10.207l3.321 3.321a1 1 0 001.414-1.414l-3.321-3.321A6 6 0 007 1zm0 2a4 4 0 110 8 4 4 0 010-8z"/>
-  </svg>
-);
+const GRAPH_UPDATE_DEBOUNCE = 500;
 
 export default function App() {
   const {
@@ -37,17 +17,21 @@ export default function App() {
     updateNote,
     deleteNote,
     getStats,
-    exportNotes,
+    exportNotes
   } = useNotes();
 
   const [selectedNote, setSelectedNote] = useState(null);
   const [editingNote, setEditingNote] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [graphData, setGraphData] = useState(null);
+  const [graphLoading, setGraphLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [connectionError, setConnectionError] = useState(null);
-
-  const { graphData, loading: graphLoading, error: graphError } = useGraph(notes, connected);
+  const [error, setError] = useState(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  
+  const graphRef = useRef(null);
+  const updateTimerRef = useRef(null);
 
   // Check backend connection
   useEffect(() => {
@@ -55,10 +39,10 @@ export default function App() {
       try {
         await apiService.checkHealth();
         setConnected(true);
-        setConnectionError(null);
+        setError(null);
       } catch (err) {
         setConnected(false);
-        setConnectionError('Backend server not available');
+        setError('Backend unavailable. Ensure server is running on http://localhost:8000');
       }
     };
 
@@ -67,7 +51,69 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle note operations
+  // Update dimensions on resize
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (graphRef.current) {
+        setDimensions({
+          width: graphRef.current.clientWidth,
+          height: graphRef.current.clientHeight
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
+  // Generate graph with debouncing
+  useEffect(() => {
+    if (updateTimerRef.current) {
+      clearTimeout(updateTimerRef.current);
+    }
+
+    if (!connected || notes.length < 2) {
+      setGraphData(null);
+      return;
+    }
+
+    updateTimerRef.current = setTimeout(async () => {
+      setGraphLoading(true);
+      try {
+        const documents = notes.map(note => 
+          `${note.title}. ${note.content} ${note.tags || ''}`
+        );
+        
+        const labels = notes.map(note => 
+          note.title.length > 30 ? `${note.title.substring(0, 30)}...` : note.title
+        );
+
+        const graph = await apiService.buildGraph({
+          documents,
+          labels,
+          mode: 'knn',
+          top_k: Math.min(2, notes.length - 1),
+          dr_method: 'pca'
+        });
+
+        setGraphData(graph);
+        setError(null);
+      } catch (err) {
+        console.error('Graph generation failed:', err);
+        setError(`Graph generation failed: ${err.message}`);
+      } finally {
+        setGraphLoading(false);
+      }
+    }, GRAPH_UPDATE_DEBOUNCE);
+
+    return () => {
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+      }
+    };
+  }, [notes, connected]);
+
   const handleSaveNote = useCallback((noteData) => {
     if (editingNote) {
       updateNote(editingNote.originalIndex, noteData);
@@ -89,67 +135,69 @@ export default function App() {
     if (selectedNote === index) setSelectedNote(null);
   }, [deleteNote, selectedNote]);
 
-  const handleNewNote = () => {
+  const handleNodeClick = useCallback((nodeId) => {
+    setSelectedNote(nodeId);
+    setEditingNote(null);
+    setIsCreating(false);
+  }, []);
+
+  const handleNewNote = useCallback(() => {
     setIsCreating(true);
     setEditingNote(null);
     setSelectedNote(null);
-  };
+  }, []);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setIsCreating(false);
     setEditingNote(null);
-  };
+  }, []);
 
-  const error = notesError || connectionError || graphError;
   const stats = getStats();
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1 className="app-title">Semantic Notes</h1>
+        <h1>Semantic Notes</h1>
         
         <div className="header-actions">
           <div className="search-bar">
-            <SearchIcon />
+            <span className="search-icon">⌕</span>
             <input
               type="text"
               placeholder="Search notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
-              aria-label="Search notes"
             />
           </div>
 
           <button onClick={handleNewNote} className="btn btn-primary">
-            <PlusIcon />
             New Note
           </button>
 
           <button 
             onClick={exportNotes} 
-            className="btn btn-ghost" 
+            className="btn btn-secondary btn-icon" 
             title="Export Notes"
-            aria-label="Export notes"
           >
-            <ExportIcon />
+            ↓
           </button>
 
           <div className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
-            <span className="status-indicator" />
-            {connected ? 'Connected' : 'Offline'}
+            <span className={`status-indicator ${connected ? '' : 'disconnected'}`} />
+            {connected ? 'Connected' : 'Disconnected'}
           </div>
         </div>
       </header>
 
-      {error && (
-        <div className="error-banner" role="alert">
-          {error}
+      {(error || notesError) && (
+        <div className="error-banner">
+          ⚠ {error || notesError}
         </div>
       )}
 
       <div className="main-content">
-        <aside className="sidebar">
+        <div className="sidebar">
           {isCreating || editingNote ? (
             <NoteEditor
               note={editingNote}
@@ -157,27 +205,79 @@ export default function App() {
               onCancel={handleCancel}
             />
           ) : (
-            <NotesList
-              notes={notes}
-              onSelect={setSelectedNote}
-              onEdit={handleEditNote}
-              onDelete={handleDeleteNote}
-              selectedNote={selectedNote}
-              searchTerm={searchTerm}
-              stats={stats}
-            />
+            <>
+              <NotesList
+                notes={notes}
+                onSelect={setSelectedNote}
+                onEdit={handleEditNote}
+                onDelete={handleDeleteNote}
+                selectedNote={selectedNote}
+                searchTerm={searchTerm}
+              />
+              
+              {notes.length > 0 && (
+                <div className="stats-bar">
+                  <div>{stats.totalNotes} notes • {stats.totalWords} words</div>
+                  <div>{stats.totalTags} unique tags</div>
+                </div>
+              )}
+            </>
           )}
-        </aside>
+        </div>
 
-        <main className="graph-container">
-          <GraphVisualization
-            graphData={graphData}
-            loading={notesLoading || graphLoading}
-            notes={notes}
-            selectedNote={selectedNote}
-            onNodeClick={setSelectedNote}
-          />
-        </main>
+        <div className="graph-container" ref={graphRef}>
+          {notesLoading ? (
+            <div className="loading">
+              <div className="loading-spinner" />
+              <div>Loading notes...</div>
+            </div>
+          ) : notes.length === 0 ? (
+            <div className="empty-state">
+              <h3>Welcome to Semantic Notes</h3>
+              <p>Create your first note to get started.</p>
+              <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>
+                Notes will be connected based on semantic similarity.
+              </p>
+            </div>
+          ) : notes.length === 1 ? (
+            <div className="empty-state">
+              <p>Create at least 2 notes to visualize connections</p>
+            </div>
+          ) : graphLoading ? (
+            <div className="loading">
+              <div className="loading-spinner" />
+              <div>Generating semantic graph...</div>
+            </div>
+          ) : graphData ? (
+            <GraphVisualization
+              graphData={graphData}
+              onNodeClick={handleNodeClick}
+              selectedNote={selectedNote}
+              width={dimensions.width}
+              height={dimensions.height}
+            />
+          ) : (
+            <div className="empty-state">
+              <p>Unable to generate graph. Check connection.</p>
+            </div>
+          )}
+
+          {selectedNote !== null && notes[selectedNote] && (
+            <div className="selected-note-preview fade-in">
+              <h3>{notes[selectedNote].title}</h3>
+              <p>{notes[selectedNote].content}</p>
+              {notes[selectedNote].tags && (
+                <div className="note-tags" style={{ marginTop: '0.5rem' }}>
+                  {notes[selectedNote].tags.split(',').map((tag, i) => (
+                    <span key={i} className="tag">
+                      {tag.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
