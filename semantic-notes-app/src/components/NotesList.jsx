@@ -85,9 +85,7 @@ export default function NotesList({
 
   const handleDelete = (index, e) => {
     e.stopPropagation();
-    if (window.confirm('Delete this note?')) {
-      onDelete(index);
-    }
+    onDelete(index);
   };
 
   return (

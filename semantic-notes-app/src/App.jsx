@@ -6,17 +6,24 @@ import { useNotes } from './hooks/useNotes';
 import apiService from './services/api';
 import './App.css';
 import ImportConfirmModal from './components/ImportConfirmModal';
+import ToastNotification from './components/ToastNotification';
+import TrashView from './components/TrashView';
 
 const GRAPH_UPDATE_DEBOUNCE = 500;
 
 export default function App() {
   const {
     notes,
+    trashedNotes,
     loading: notesLoading,
     error: notesError,
     addNote,
     updateNote,
     deleteNote,
+    moveToTrash,
+    restoreFromTrash,
+    permanentDelete,
+    emptyTrash,
     getStats,
     exportNotes,
     importNotes
@@ -34,6 +41,11 @@ export default function App() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [pendingImportedNotes, setPendingImportedNotes] = useState([]);
   const [successMessage, setSuccessMessage] = useState('');
+
+  const [activeTab, setActiveTab] = useState('notes');
+  const [toastOpen, setToastOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [lastTrashedId, setLastTrashedId] = useState(null);
   
   const graphRef = useRef(null);
   const updateTimerRef = useRef(null);
@@ -144,9 +156,21 @@ export default function App() {
   }, [notes]);
 
   const handleDeleteNote = useCallback((index) => {
-    deleteNote(index);
+    const moved = moveToTrash(index);
+    if (moved) {
+      setLastTrashedId(moved.id);
+      setToastMessage('Note moved to trash. Undo?');
+      setToastOpen(true);
+    }
     if (selectedNote === index) setSelectedNote(null);
-  }, [deleteNote, selectedNote]);
+  }, [moveToTrash, selectedNote]);
+
+  const handleUndo = useCallback(() => {
+    if (lastTrashedId != null) {
+      restoreFromTrash(lastTrashedId);
+      setLastTrashedId(null);
+    }
+  }, [lastTrashedId, restoreFromTrash]);
 
   const handleNodeClick = useCallback((nodeId) => {
     setSelectedNote(nodeId);
@@ -310,30 +334,56 @@ export default function App() {
  
       <div className="main-content">
         <div className="sidebar">
-          {isCreating || editingNote ? (
-            <NoteEditor
-              note={editingNote}
-              onSave={handleSaveNote}
-              onCancel={handleCancel}
-            />
-          ) : (
-            <>
-              <NotesList
-                notes={notes}
-                onSelect={setSelectedNote}
-                onEdit={handleEditNote}
-                onDelete={handleDeleteNote}
-                selectedNote={selectedNote}
-                searchTerm={searchTerm}
+          <div className="sidebar-tabs">
+            <button
+              className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
+              onClick={() => setActiveTab('notes')}
+              title="View Notes"
+            >
+              Notes
+            </button>
+            <button
+              className={`tab-btn ${activeTab === 'trash' ? 'active' : ''}`}
+              onClick={() => setActiveTab('trash')}
+              title="View Trash"
+            >
+              Trash{trashedNotes.length ? ` (${trashedNotes.length})` : ''}
+            </button>
+          </div>
+
+          {activeTab === 'notes' ? (
+            isCreating || editingNote ? (
+              <NoteEditor
+                note={editingNote}
+                onSave={handleSaveNote}
+                onCancel={handleCancel}
               />
-              
-              {notes.length > 0 && (
-                <div className="stats-bar">
-                  <div>{stats.totalNotes} notes • {stats.totalWords} words</div>
-                  <div>{stats.totalTags} unique tags</div>
-                </div>
-              )}
-            </>
+            ) : (
+              <>
+                <NotesList
+                  notes={notes}
+                  onSelect={setSelectedNote}
+                  onEdit={handleEditNote}
+                  onDelete={handleDeleteNote}
+                  selectedNote={selectedNote}
+                  searchTerm={searchTerm}
+                />
+                
+                {(notes.length > 0 || trashedNotes.length > 0) && (
+                  <div className="stats-bar">
+                    <div>{stats.totalNotes} notes • {stats.totalWords} words</div>
+                    <div>{stats.totalTags} unique tags • {stats.trashCount} in trash</div>
+                  </div>
+                )}
+              </>
+            )
+          ) : (
+            <TrashView
+              trashedNotes={trashedNotes}
+              onRestore={restoreFromTrash}
+              onDeleteForever={permanentDelete}
+              onEmptyTrash={emptyTrash}
+            />
           )}
         </div>
 
@@ -401,6 +451,15 @@ export default function App() {
           setShowImportModal(false);
           setPendingImportedNotes([]);
         }}
+      />
+
+      <ToastNotification
+        isOpen={toastOpen}
+        message={toastMessage}
+        actionLabel="Undo"
+        onAction={handleUndo}
+        onClose={() => setToastOpen(false)}
+        duration={5000}
       />
     </div>
   );

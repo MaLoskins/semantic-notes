@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 const STORAGE_KEY = 'semantic-notes-data';
+const TRASH_STORAGE_KEY = 'semantic-notes-trash';
 
 function loadFromStorage() {
   try {
@@ -23,6 +24,31 @@ function saveToStorage(notes) {
     }));
   } catch (err) {
     console.error('Failed to save notes:', err);
+    throw new Error('Storage quota exceeded');
+  }
+}
+
+function loadTrashFromStorage() {
+  try {
+    const stored = localStorage.getItem(TRASH_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return parsed.trash || [];
+    }
+  } catch (err) {
+    console.error('Failed to load trash:', err);
+  }
+  return [];
+}
+
+function saveTrashToStorage(trash) {
+  try {
+    localStorage.setItem(TRASH_STORAGE_KEY, JSON.stringify({
+      trash,
+      lastUpdated: new Date().toISOString()
+    }));
+  } catch (err) {
+    console.error('Failed to save trash:', err);
     throw new Error('Storage quota exceeded');
   }
 }
@@ -54,11 +80,33 @@ function normalizeNote(n) {
 
 export function useNotes() {
   const [notes, setNotes] = useState([]);
+  const [trashedNotes, setTrashedNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setNotes(loadFromStorage());
+    const loadedNotes = loadFromStorage();
+    let loadedTrash = loadTrashFromStorage();
+
+    // Auto-delete trash items older than 30 days
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const filteredTrash = loadedTrash.filter(item => {
+      const ts = item?.deletedAt ? new Date(item.deletedAt).getTime() : 0;
+      return ts && (now - ts) < THIRTY_DAYS_MS;
+    });
+    if (filteredTrash.length !== loadedTrash.length) {
+      loadedTrash = filteredTrash;
+      try {
+        saveTrashToStorage(loadedTrash);
+      } catch (err) {
+        // non-fatal; will surface via error banner if needed on next save
+        console.error('Trash cleanup save failed:', err);
+      }
+    }
+
+    setNotes(loadedNotes);
+    setTrashedNotes(loadedTrash);
     setLoading(false);
   }, []);
 
@@ -72,6 +120,17 @@ export function useNotes() {
       }
     }
   }, [notes, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      try {
+        saveTrashToStorage(trashedNotes);
+        setError(null);
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+  }, [trashedNotes, loading]);
 
   const addNote = useCallback((noteData) => {
     const newNote = {
@@ -98,6 +157,61 @@ export function useNotes() {
 
   const deleteNote = useCallback((index) => {
     setNotes(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Trash management
+  const moveToTrash = useCallback((index) => {
+    let movedNote = null;
+    setNotes(prev => {
+      const note = prev[index];
+      if (!note) return prev;
+      movedNote = note;
+      setTrashedNotes(trash => [
+        { ...note, deletedAt: new Date().toISOString() },
+        ...trash
+      ]);
+      return prev.filter((_, i) => i !== index);
+    });
+    return movedNote;
+  }, []);
+
+  const restoreFromTrash = useCallback((id) => {
+    let restored = null;
+    setTrashedNotes(prev => {
+      const idx = prev.findIndex(n => n.id === id);
+      if (idx === -1) return prev;
+      restored = { ...prev[idx] };
+      const updatedTrash = prev.filter((_, i) => i !== idx);
+      setNotes(notesPrev => [
+        ...notesPrev,
+        {
+          id: restored.id,
+          title: restored.title,
+          content: restored.content,
+          tags: restored.tags,
+          createdAt: restored.createdAt,
+          updatedAt: new Date().toISOString()
+        }
+      ]);
+      return updatedTrash;
+    });
+    return restored;
+  }, []);
+
+  const permanentDelete = useCallback((id) => {
+    let deleted = false;
+    setTrashedNotes(prev => {
+      const next = prev.filter(n => {
+        if (!deleted && n.id === id) deleted = true;
+        return n.id !== id;
+      });
+      return next;
+    });
+    return deleted;
+  }, []);
+
+  const emptyTrash = useCallback(() => {
+    setTrashedNotes([]);
   }, []);
   
   const importNotes = useCallback((incomingNotes, mode = 'merge') => {
@@ -176,7 +290,7 @@ export function useNotes() {
 
   const getStats = useCallback(() => {
     const totalNotes = notes.length;
-    const totalWords = notes.reduce((sum, note) => 
+    const totalWords = notes.reduce((sum, note) =>
       sum + note.content.split(/\s+/).filter(w => w).length, 0
     );
     const totalChars = notes.reduce((sum, note) => sum + note.content.length, 0);
@@ -187,17 +301,23 @@ export function useNotes() {
       totalWords,
       totalChars,
       totalTags: tags.length,
-      averageNoteLength: totalNotes > 0 ? Math.round(totalChars / totalNotes) : 0
+      averageNoteLength: totalNotes > 0 ? Math.round(totalChars / totalNotes) : 0,
+      trashCount: trashedNotes.length
     };
-  }, [notes, getAllTags]);
+  }, [notes, getAllTags, trashedNotes]);
 
   return {
     notes,
+    trashedNotes,
     loading,
     error,
     addNote,
     updateNote,
     deleteNote,
+    moveToTrash,
+    restoreFromTrash,
+    permanentDelete,
+    emptyTrash,
     searchNotes,
     getAllTags,
     exportNotes,
