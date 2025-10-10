@@ -1,14 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
+import GraphControlsPanel from './GraphControlsPanel';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
 
-export default function GraphVisualization({ 
-  graphData, 
-  onNodeClick, 
+export default function GraphVisualization({
+  graphData,
+  onNodeClick,
   selectedNote,
   width = 800,
-  height = 600 
+  height = 600,
+  controlsParams = {},
+  onControlsChange = () => {},
+  onControlsReset = () => {},
+  stats = { nodes: 0, edges: 0 },
+  loading = false,
+  panelPosition = 'bottom-left'
 }) {
   const svgRef = useRef(null);
   const simulationRef = useRef(null);
@@ -209,14 +216,23 @@ export default function GraphVisualization({
 
   return (
     <div className="graph-visualization">
-      <svg 
-        ref={svgRef} 
-        width={width} 
+      <svg
+        ref={svgRef}
+        width={width}
         height={height}
-        style={{ 
+        style={{
           background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
           borderRadius: '8px'
         }}
+      />
+
+      <GraphControlsPanel
+        params={controlsParams}
+        onChange={onControlsChange}
+        onReset={onControlsReset}
+        stats={stats}
+        loading={loading}
+        position={panelPosition}
       />
       
       <div className="graph-controls">
