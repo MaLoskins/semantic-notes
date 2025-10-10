@@ -8,120 +8,71 @@ export function useNotes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load notes from localStorage on mount
+  // Load from localStorage
   useEffect(() => {
     try {
       const storedData = localStorage.getItem(STORAGE_KEY);
       if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        setNotes(parsedData.notes || []);
+        const { notes = [] } = JSON.parse(storedData);
+        setNotes(notes);
       }
     } catch (err) {
-      console.error('Failed to load notes from storage:', err);
+      console.error('Failed to load notes:', err);
       setError('Failed to load saved notes');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Save notes to localStorage whenever they change
+  // Save to localStorage
   useEffect(() => {
     if (!loading && notes.length > 0) {
       try {
-        const dataToStore = {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
           notes,
           lastUpdated: new Date().toISOString()
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToStore));
+        }));
       } catch (err) {
-        console.error('Failed to save notes to storage:', err);
-        setError('Failed to save notes');
+        console.error('Failed to save notes:', err);
       }
     }
   }, [notes, loading]);
 
-  // Add a new note
   const addNote = useCallback((noteData) => {
     const newNote = {
-      id: Date.now(), // Simple ID generation
+      id: Date.now(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...noteData
     };
-    
-    setNotes(prevNotes => [...prevNotes, newNote]);
+    setNotes(prev => [...prev, newNote]);
     return newNote;
   }, []);
 
-  // Update an existing note
   const updateNote = useCallback((index, noteData) => {
-    setNotes(prevNotes => {
-      const newNotes = [...prevNotes];
-      newNotes[index] = {
-        ...newNotes[index],
+    setNotes(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
         ...noteData,
         updatedAt: new Date().toISOString()
       };
-      return newNotes;
+      return updated;
     });
   }, []);
 
-  // Delete a note
   const deleteNote = useCallback((index) => {
-    setNotes(prevNotes => prevNotes.filter((_, i) => i !== index));
+    setNotes(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  // Get a single note by index
-  const getNote = useCallback((index) => {
-    return notes[index] || null;
-  }, [notes]);
-
-  // Search notes
-  const searchNotes = useCallback((searchTerm) => {
-    if (!searchTerm) return notes;
-    
-    const term = searchTerm.toLowerCase();
-    return notes.filter(note => 
-      note.title.toLowerCase().includes(term) ||
-      note.content.toLowerCase().includes(term) ||
-      (note.tags && note.tags.toLowerCase().includes(term))
-    );
-  }, [notes]);
-
-  // Get notes by tag
-  const getNotesByTag = useCallback((tag) => {
-    if (!tag) return notes;
-    
-    return notes.filter(note => 
-      note.tags && note.tags.includes(tag)
-    );
-  }, [notes]);
-
-  // Get all unique tags
-  const getAllTags = useCallback(() => {
-    const tagsSet = new Set();
-    notes.forEach(note => {
-      if (note.tags) {
-        note.tags.split(',').forEach(tag => {
-          const trimmedTag = tag.trim();
-          if (trimmedTag) {
-            tagsSet.add(trimmedTag);
-          }
-        });
-      }
-    });
-    return Array.from(tagsSet).sort();
-  }, [notes]);
-
-  // Export notes as JSON
   const exportNotes = useCallback(() => {
-    const dataToExport = {
+    const data = {
       notes,
       exportedAt: new Date().toISOString(),
       version: '1.0'
     };
     
-    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: 'application/json'
     });
     
@@ -135,57 +86,27 @@ export function useNotes() {
     URL.revokeObjectURL(url);
   }, [notes]);
 
-  // Import notes from JSON
-  const importNotes = useCallback((file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        try {
-          const importedData = JSON.parse(e.target.result);
-          if (importedData.notes && Array.isArray(importedData.notes)) {
-            setNotes(prevNotes => [...prevNotes, ...importedData.notes]);
-            resolve(importedData.notes.length);
-          } else {
-            reject(new Error('Invalid file format'));
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-      
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
-    });
-  }, []);
-
-  // Clear all notes
-  const clearAllNotes = useCallback(() => {
-    if (window.confirm('Are you sure you want to delete all notes? This action cannot be undone.')) {
-      setNotes([]);
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, []);
-
-  // Get statistics
   const getStats = useCallback(() => {
-    const totalNotes = notes.length;
     const totalWords = notes.reduce((sum, note) => 
-      sum + note.content.split(/\s+/).length, 0
+      sum + note.content.split(/\s+/).filter(Boolean).length, 0
     );
-    const totalChars = notes.reduce((sum, note) => 
-      sum + note.content.length, 0
-    );
-    const tags = getAllTags();
+    
+    const tagsSet = new Set();
+    notes.forEach(note => {
+      if (note.tags) {
+        note.tags.split(',').forEach(tag => {
+          const trimmed = tag.trim();
+          if (trimmed) tagsSet.add(trimmed);
+        });
+      }
+    });
     
     return {
-      totalNotes,
+      totalNotes: notes.length,
       totalWords,
-      totalChars,
-      totalTags: tags.length,
-      averageNoteLength: totalNotes > 0 ? Math.round(totalChars / totalNotes) : 0
+      totalTags: tagsSet.size
     };
-  }, [notes, getAllTags]);
+  }, [notes]);
 
   return {
     notes,
@@ -194,14 +115,8 @@ export function useNotes() {
     addNote,
     updateNote,
     deleteNote,
-    getNote,
-    searchNotes,
-    getNotesByTag,
-    getAllTags,
-    exportNotes,
-    importNotes,
-    clearAllNotes,
     getStats,
+    exportNotes,
     setError
   };
 }

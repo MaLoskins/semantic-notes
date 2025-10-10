@@ -1,14 +1,34 @@
-// App.jsx - Main Application Component
+// App.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import NoteEditor from './components/NoteEditor';
 import NotesList from './components/NotesList';
 import GraphVisualization from './components/GraphVisualization';
 import { useNotes } from './hooks/useNotes';
+import { useGraph } from './hooks/useGraph';
 import apiService from './services/api';
 import './App.css';
 
+// Icons as simple SVG components
+const PlusIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+  </svg>
+);
+
+const ExportIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 10V2m0 0L5 5m3-3l3 3M3 10v3a1 1 0 001 1h8a1 1 0 001-1v-3" 
+          stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  </svg>
+);
+
+const SearchIcon = () => (
+  <svg className="search-icon" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M7 1a6 6 0 104.472 10.207l3.321 3.321a1 1 0 001.414-1.414l-3.321-3.321A6 6 0 007 1zm0 2a4 4 0 110 8 4 4 0 010-8z"/>
+  </svg>
+);
+
 export default function App() {
-  // Notes management
   const {
     notes,
     loading: notesLoading,
@@ -18,193 +38,118 @@ export default function App() {
     deleteNote,
     getStats,
     exportNotes,
-    clearAllNotes
   } = useNotes();
 
-  // UI state
   const [selectedNote, setSelectedNote] = useState(null);
   const [editingNote, setEditingNote] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [graphData, setGraphData] = useState(null);
-  const [graphLoading, setGraphLoading] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [error, setError] = useState(null);
-  const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 });
+  const [connectionError, setConnectionError] = useState(null);
 
-  // Check backend connection on mount
+  const { graphData, loading: graphLoading, error: graphError } = useGraph(notes, connected);
+
+  // Check backend connection
   useEffect(() => {
     const checkConnection = async () => {
       try {
         await apiService.checkHealth();
         setConnected(true);
-        setError(null);
-        
-        // Get backend stats
-        const stats = await apiService.getStats();
-        console.log('Backend stats:', stats);
+        setConnectionError(null);
       } catch (err) {
         setConnected(false);
-        setError('Cannot connect to backend. Please ensure the server is running on http://localhost:8000');
+        setConnectionError('Backend server not available');
       }
     };
 
     checkConnection();
-    // Re-check connection every 10 seconds
     const interval = setInterval(checkConnection, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Update graph dimensions on window resize
-  useEffect(() => {
-    const updateDimensions = () => {
-      const graphContainer = document.querySelector('.graph-container');
-      if (graphContainer) {
-        setGraphDimensions({
-          width: graphContainer.clientWidth,
-          height: graphContainer.clientHeight
-        });
-      }
-    };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, []);
-
-  // Generate graph when notes change or connection is established
-  useEffect(() => {
-    const generateGraph = async () => {
-      if (!connected || notes.length < 2) {
-        setGraphData(null);
-        return;
-      }
-
-      setGraphLoading(true);
-      try {
-        // Combine title and content for better semantic matching
-        const documents = notes.map(note => 
-          `${note.title}. ${note.content} ${note.tags || ''}`
-        );
-        
-        const labels = notes.map(note => 
-          note.title.length > 30 
-            ? note.title.substring(0, 30) + '...' 
-            : note.title
-        );
-
-        const graph = await apiService.buildGraph({
-          documents,
-          labels,
-          mode: 'knn',
-          top_k: Math.min(2, notes.length - 1), // KNN with k=2 as requested
-          dr_method: 'pca' // PCA as requested
-        });
-
-        setGraphData(graph);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to generate graph:', err);
-        setError(`Failed to generate semantic graph: ${err.message}`);
-      } finally {
-        setGraphLoading(false);
-      }
-    };
-
-    generateGraph();
-  }, [notes, connected]);
-
   // Handle note operations
   const handleSaveNote = useCallback((noteData) => {
-    if (noteData.id !== undefined) {
-      // Editing existing note
+    if (editingNote) {
       updateNote(editingNote.originalIndex, noteData);
       setEditingNote(null);
     } else {
-      // Creating new note
       addNote(noteData);
       setIsCreating(false);
     }
   }, [editingNote, updateNote, addNote]);
 
   const handleEditNote = useCallback((index) => {
-    const note = notes[index];
-    setEditingNote({ ...note, originalIndex: index });
+    setEditingNote({ ...notes[index], originalIndex: index });
     setIsCreating(false);
     setSelectedNote(null);
   }, [notes]);
 
   const handleDeleteNote = useCallback((index) => {
     deleteNote(index);
-    if (selectedNote === index) {
-      setSelectedNote(null);
-    }
+    if (selectedNote === index) setSelectedNote(null);
   }, [deleteNote, selectedNote]);
 
-  const handleNodeClick = useCallback((nodeId) => {
-    setSelectedNote(nodeId);
-    setEditingNote(null);
-    setIsCreating(false);
-  }, []);
-
-  const handleNewNote = useCallback(() => {
+  const handleNewNote = () => {
     setIsCreating(true);
     setEditingNote(null);
     setSelectedNote(null);
-  }, []);
+  };
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = () => {
     setIsCreating(false);
     setEditingNote(null);
-  }, []);
+  };
 
+  const error = notesError || connectionError || graphError;
   const stats = getStats();
 
   return (
     <div className="app">
-      {/* Header */}
       <header className="app-header">
-        <h1>
-          🧠 Semantic Notes
-        </h1>
+        <h1 className="app-title">Semantic Notes</h1>
         
         <div className="header-actions">
           <div className="search-bar">
-            <span className="search-icon">🔍</span>
+            <SearchIcon />
             <input
               type="text"
               placeholder="Search notes..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="search-input"
+              aria-label="Search notes"
             />
           </div>
 
           <button onClick={handleNewNote} className="btn btn-primary">
-            ➕ New Note
+            <PlusIcon />
+            New Note
           </button>
 
-          <button onClick={exportNotes} className="btn btn-secondary" title="Export Notes">
-            💾
+          <button 
+            onClick={exportNotes} 
+            className="btn btn-ghost" 
+            title="Export Notes"
+            aria-label="Export notes"
+          >
+            <ExportIcon />
           </button>
 
-          <span className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
-            {connected ? '🟢 Connected' : '🔴 Disconnected'}
-          </span>
+          <div className={`connection-status ${connected ? 'connected' : 'disconnected'}`}>
+            <span className="status-indicator" />
+            {connected ? 'Connected' : 'Offline'}
+          </div>
         </div>
       </header>
 
-      {/* Error Banner */}
-      {(error || notesError) && (
-        <div className="error-banner">
-          ⚠️ {error || notesError}
+      {error && (
+        <div className="error-banner" role="alert">
+          {error}
         </div>
       )}
 
-      {/* Main Content */}
       <div className="main-content">
-        {/* Sidebar */}
-        <div className="sidebar">
+        <aside className="sidebar">
           {isCreating || editingNote ? (
             <NoteEditor
               note={editingNote}
@@ -212,84 +157,27 @@ export default function App() {
               onCancel={handleCancel}
             />
           ) : (
-            <>
-              <NotesList
-                notes={notes}
-                onSelect={setSelectedNote}
-                onEdit={handleEditNote}
-                onDelete={handleDeleteNote}
-                selectedNote={selectedNote}
-                searchTerm={searchTerm}
-              />
-              
-              {notes.length > 0 && (
-                <div style={{ 
-                  padding: '1rem', 
-                  borderTop: '1px solid var(--border-color)',
-                  fontSize: '0.75rem',
-                  color: 'var(--text-dimmed)'
-                }}>
-                  <div>📊 {stats.totalNotes} notes • {stats.totalWords} words</div>
-                  <div>🏷️ {stats.totalTags} unique tags</div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Graph Container */}
-        <div className="graph-container">
-          {notesLoading ? (
-            <div className="loading">
-              <div>Loading notes...</div>
-            </div>
-          ) : notes.length === 0 ? (
-            <div className="empty-state">
-              <h3>Welcome to Semantic Notes! 🚀</h3>
-              <p>Create your first note to get started.</p>
-              <p style={{ marginTop: '1rem', fontSize: '0.875rem' }}>
-                Your notes will be connected based on their semantic similarity.
-              </p>
-            </div>
-          ) : notes.length === 1 ? (
-            <div className="empty-state">
-              <p>Create at least 2 notes to visualize their semantic connections</p>
-            </div>
-          ) : graphLoading ? (
-            <div className="loading">
-              <div>🔄 Generating semantic graph...</div>
-            </div>
-          ) : graphData ? (
-            <GraphVisualization
-              graphData={graphData}
-              onNodeClick={handleNodeClick}
+            <NotesList
+              notes={notes}
+              onSelect={setSelectedNote}
+              onEdit={handleEditNote}
+              onDelete={handleDeleteNote}
               selectedNote={selectedNote}
-              width={graphDimensions.width}
-              height={graphDimensions.height}
+              searchTerm={searchTerm}
+              stats={stats}
             />
-          ) : (
-            <div className="empty-state">
-              <p>Unable to generate graph. Check your connection.</p>
-            </div>
           )}
+        </aside>
 
-          {/* Selected Note Preview */}
-          {selectedNote !== null && notes[selectedNote] && (
-            <div className="selected-note-preview fade-in">
-              <h3>{notes[selectedNote].title}</h3>
-              <p>{notes[selectedNote].content}</p>
-              {notes[selectedNote].tags && (
-                <div style={{ marginTop: '0.5rem' }}>
-                  {notes[selectedNote].tags.split(',').map((tag, i) => (
-                    <span key={i} className="tag" style={{ marginRight: '0.25rem' }}>
-                      {tag.trim()}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <main className="graph-container">
+          <GraphVisualization
+            graphData={graphData}
+            loading={notesLoading || graphLoading}
+            notes={notes}
+            selectedNote={selectedNote}
+            onNodeClick={setSelectedNote}
+          />
+        </main>
       </div>
     </div>
   );

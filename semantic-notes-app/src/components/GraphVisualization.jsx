@@ -2,38 +2,73 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
+const ResetIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+    <path d="M4 10a6 6 0 0112 0v1m0 0v3m0-3h-3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
+  </svg>
+);
+
+const PlayIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+    <path d="M7 5l8 5-8 5V5z" fill="currentColor"/>
+  </svg>
+);
+
+const PauseIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+    <rect x="6" y="5" width="3" height="10" fill="currentColor"/>
+    <rect x="11" y="5" width="3" height="10" fill="currentColor"/>
+  </svg>
+);
+
 export default function GraphVisualization({ 
   graphData, 
-  onNodeClick, 
+  loading, 
+  notes, 
   selectedNote,
-  width = 800,
-  height = 600 
+  onNodeClick 
 }) {
   const svgRef = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState(null);
   const [simulationRunning, setSimulationRunning] = useState(true);
+  const simulationRef = useRef(null);
 
+  // Update dimensions on resize
+  useEffect(() => {
+    const updateDimensions = () => {
+      const container = svgRef.current?.parentElement;
+      if (container) {
+        setDimensions({
+          width: container.clientWidth,
+          height: container.clientHeight
+        });
+      }
+    };
+
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
+  // Render graph
   useEffect(() => {
     if (!graphData || !svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
-    
-    // Clear previous content
     svg.selectAll('*').remove();
 
     const { nodes, edges } = graphData;
-    
     if (!nodes || nodes.length === 0) return;
 
-    // Create container groups
+    const { width, height } = dimensions;
+
+    // Setup
     const g = svg.append('g');
     
-    // Add zoom behavior
     const zoom = d3.zoom()
       .scaleExtent([0.1, 10])
-      .on('zoom', (event) => {
-        g.attr('transform', event.transform);
-      });
+      .on('zoom', (event) => g.attr('transform', event.transform));
     
     svg.call(zoom);
 
@@ -51,118 +86,72 @@ export default function GraphVisualization({
       target: String(e.target)
     }));
 
-    // Create scales for node size and edge width
+    // Scales
     const weightScale = d3.scaleLinear()
       .domain([0, 1])
       .range([0.1, 1]);
 
-    // Create force simulation
+    // Force simulation
     const simulation = d3.forceSimulation(nodeData)
       .force('link', d3.forceLink(linkData)
         .id(d => d.id)
-        .distance(d => 120 * (1 - (d.weight || 0.5)))
+        .distance(d => 100 * (1 - (d.weight || 0.5)))
         .strength(d => weightScale(d.weight || 0.5)))
-      .force('charge', d3.forceManyBody()
-        .strength(-400)
-        .distanceMax(250))
+      .force('charge', d3.forceManyBody().strength(-300).distanceMax(200))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide()
-        .radius(35)
-        .strength(0.7))
-      .force('x', d3.forceX(width / 2).strength(0.05))
-      .force('y', d3.forceY(height / 2).strength(0.05));
+      .force('collision', d3.forceCollide().radius(30).strength(0.5))
+      .force('x', d3.forceX(width / 2).strength(0.02))
+      .force('y', d3.forceY(height / 2).strength(0.02));
 
-    // Define gradients for edges
-    const defs = svg.append('defs');
-    
-    linkData.forEach((d, i) => {
-      const gradient = defs.append('linearGradient')
-        .attr('id', `gradient-${i}`)
-        .attr('gradientUnits', 'userSpaceOnUse');
-      
-      gradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#4a5568')
-        .attr('stop-opacity', 0.2);
-      
-      gradient.append('stop')
-        .attr('offset', '50%')
-        .attr('stop-color', '#4a5568')
-        .attr('stop-opacity', weightScale(d.weight || 0.5));
-      
-      gradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#4a5568')
-        .attr('stop-opacity', 0.2);
-    });
+    simulationRef.current = simulation;
 
-    // Create edge elements
-    const linkGroup = g.append('g')
-      .attr('class', 'links');
-
-    const link = linkGroup.selectAll('line')
+    // Links
+    const link = g.append('g')
+      .selectAll('line')
       .data(linkData)
       .enter().append('line')
-      .attr('stroke', (d, i) => `url(#gradient-${i})`)
-      .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 4))
-      .style('pointer-events', 'none');
+      .attr('stroke', '#333')
+      .attr('stroke-width', d => Math.max(0.5, (d.weight || 0.5) * 3))
+      .attr('stroke-opacity', d => 0.3 + (d.weight || 0.5) * 0.4);
 
-    // Create edge labels
-    const linkLabelGroup = g.append('g')
-      .attr('class', 'link-labels');
-
-    const linkLabels = linkLabelGroup.selectAll('text')
-      .data(linkData.filter(d => d.weight > 0.5))
-      .enter().append('text')
-      .attr('class', 'link-label')
-      .text(d => d.weight.toFixed(2))
-      .style('font-size', '10px')
-      .style('fill', '#6b7280')
-      .style('text-anchor', 'middle')
-      .style('pointer-events', 'none');
-
-    // Create node group
-    const nodeGroup = g.append('g')
-      .attr('class', 'nodes');
-
-    const node = nodeGroup.selectAll('g')
+    // Nodes
+    const node = g.append('g')
+      .selectAll('g')
       .data(nodeData)
       .enter().append('g')
-      .attr('class', 'node')
       .style('cursor', 'pointer')
       .call(d3.drag()
         .on('start', dragstarted)
         .on('drag', dragged)
         .on('end', dragended));
 
-    // Add circles for nodes
+    // Node circles
     node.append('circle')
-      .attr('r', d => d.id === String(selectedNote) ? 12 : 10)
+      .attr('r', d => d.id === String(selectedNote) ? 8 : 6)
       .attr('fill', d => {
-        if (d.id === String(selectedNote)) return '#10b981';
+        if (d.id === String(selectedNote)) return '#16a34a';
         if (d.cluster !== undefined) {
-          const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+          const colors = ['#2563eb', '#7c3aed', '#dc2626', '#ea580c', '#16a34a'];
           return colors[d.cluster % colors.length];
         }
-        return '#3b82f6';
+        return '#2563eb';
       })
-      .attr('stroke', '#1f2937')
-      .attr('stroke-width', 2)
-      .style('filter', 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))');
+      .attr('stroke', '#1a1a1a')
+      .attr('stroke-width', 1.5);
 
-    // Add node labels
+    // Node labels
     node.append('text')
       .text(d => d.label || `Note ${d.id}`)
       .attr('x', 0)
-      .attr('y', -15)
-      .style('font-size', '12px')
+      .attr('y', -12)
+      .style('font-size', '11px')
       .style('font-weight', '500')
-      .style('fill', '#e5e7eb')
+      .style('fill', '#e0e0e0')
       .style('text-anchor', 'middle')
       .style('pointer-events', 'none')
-      .style('filter', 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8))');
+      .style('user-select', 'none');
 
-    // Add interaction handlers
+    // Interactions
     node.on('click', (event, d) => {
         event.stopPropagation();
         onNodeClick(parseInt(d.id));
@@ -170,18 +159,14 @@ export default function GraphVisualization({
       .on('mouseenter', (event, d) => {
         setHoveredNode(d);
         d3.select(event.currentTarget).select('circle')
-          .transition()
-          .duration(200)
-          .attr('r', 14)
-          .attr('stroke-width', 3);
+          .transition().duration(150)
+          .attr('r', 9);
       })
       .on('mouseleave', (event) => {
         setHoveredNode(null);
         d3.select(event.currentTarget).select('circle')
-          .transition()
-          .duration(200)
-          .attr('r', d => d.id === String(selectedNote) ? 12 : 10)
-          .attr('stroke-width', 2);
+          .transition().duration(150)
+          .attr('r', d => d.id === String(selectedNote) ? 8 : 6);
       });
 
     // Simulation tick
@@ -191,10 +176,6 @@ export default function GraphVisualization({
         .attr('y1', d => d.source.y)
         .attr('x2', d => d.target.x)
         .attr('y2', d => d.target.y);
-
-      linkLabels
-        .attr('x', d => (d.source.x + d.target.x) / 2)
-        .attr('y', d => (d.source.y + d.target.y) / 2);
 
       node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
@@ -219,79 +200,107 @@ export default function GraphVisualization({
       }
     }
 
-    // Controls
-    const toggleSimulation = () => {
-      if (simulationRunning) {
-        simulation.stop();
-      } else {
-        simulation.alpha(0.3).restart();
-      }
-      setSimulationRunning(!simulationRunning);
-    };
-
-    // Reset view button
-    const resetView = () => {
-      svg.transition()
-        .duration(750)
-        .call(zoom.transform, d3.zoomIdentity);
-    };
-
-    // Store functions for external access
-    svg.node().resetView = resetView;
-    svg.node().toggleSimulation = toggleSimulation;
-
-    // Cleanup
-    return () => {
-      simulation.stop();
-    };
-  }, [graphData, selectedNote, width, height, onNodeClick]);
+    return () => simulation.stop();
+  }, [graphData, selectedNote, dimensions, onNodeClick]);
 
   const handleResetView = () => {
     const svg = d3.select(svgRef.current);
-    if (svg.node()?.resetView) {
-      svg.node().resetView();
-    }
+    const zoom = d3.zoom().scaleExtent([0.1, 10]);
+    svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
   };
 
   const handleToggleSimulation = () => {
-    const svg = d3.select(svgRef.current);
-    if (svg.node()?.toggleSimulation) {
-      svg.node().toggleSimulation();
+    if (simulationRef.current) {
+      if (simulationRunning) {
+        simulationRef.current.stop();
+      } else {
+        simulationRef.current.alpha(0.3).restart();
+      }
       setSimulationRunning(!simulationRunning);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="graph-container">
+        <div className="loading">
+          <div className="spinner" />
+          <span>Loading graph...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!notes || notes.length === 0) {
+    return (
+      <div className="graph-container">
+        <div className="empty-state">
+          <h3>Welcome to Semantic Notes</h3>
+          <p>Create your first note to get started</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (notes.length === 1) {
+    return (
+      <div className="graph-container">
+        <div className="empty-state">
+          <p>Create at least 2 notes to visualize connections</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="graph-visualization">
       <svg 
         ref={svgRef} 
-        width={width} 
-        height={height}
-        style={{ 
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          borderRadius: '8px'
-        }}
+        width={dimensions.width} 
+        height={dimensions.height}
+        style={{ background: '#0f0f0f' }}
       />
       
-      <div className="graph-controls">
-        <button onClick={handleResetView} className="control-btn" title="Reset View">
-          🎯
-        </button>
-        <button onClick={handleToggleSimulation} className="control-btn" title="Toggle Physics">
-          {simulationRunning ? '⏸️' : '▶️'}
-        </button>
-      </div>
+      {graphData && (
+        <div className="graph-controls">
+          <button 
+            onClick={handleResetView} 
+            className="control-btn" 
+            title="Reset View"
+            aria-label="Reset view"
+          >
+            <ResetIcon />
+          </button>
+          <button 
+            onClick={handleToggleSimulation} 
+            className="control-btn" 
+            title={simulationRunning ? 'Pause' : 'Play'}
+            aria-label={simulationRunning ? 'Pause simulation' : 'Play simulation'}
+          >
+            {simulationRunning ? <PauseIcon /> : <PlayIcon />}
+          </button>
+        </div>
+      )}
 
       {hoveredNode && (
         <div className="node-tooltip">
           <strong>{hoveredNode.label}</strong>
-          <br />
-          ID: {hoveredNode.id}
           {hoveredNode.cluster !== undefined && (
-            <>
-              <br />
-              Cluster: {hoveredNode.cluster}
-            </>
+            <div>Cluster: {hoveredNode.cluster}</div>
+          )}
+        </div>
+      )}
+
+      {selectedNote !== null && notes[selectedNote] && (
+        <div className="selected-note-preview">
+          <h3>{notes[selectedNote].title}</h3>
+          <p>{notes[selectedNote].content}</p>
+          {notes[selectedNote].tags && (
+            <div className="note-tags" style={{ marginTop: '0.5rem' }}>
+              {notes[selectedNote].tags.split(',').map((tag, i) => (
+                <span key={i} className="tag">{tag.trim()}</span>
+              ))}
+            </div>
           )}
         </div>
       )}
