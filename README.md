@@ -1,4 +1,4 @@
-# Semantic Embedding Graph Engine — Python Backend
+# Semantic Embedding Graph Engine & UI
 
 ## Dashboard
 
