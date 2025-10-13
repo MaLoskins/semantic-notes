@@ -1,5 +1,9 @@
 # Semantic Embedding Graph Engine — Python Backend
 
+## Dashboard
+
+![Dashboard](Dashboard.png)
+
 ## Quick Start
 
 ```bash
