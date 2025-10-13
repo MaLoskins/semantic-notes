@@ -48,18 +48,20 @@ export default function GraphVisualization({
     svg.call(zoom);
 
     // Prepare data
+
     const nodeData = nodes.map(n => ({
-      ...n,
+      ...n,                                // keep your original props (name/title/label/cluster/color)
       id: String(n.id),
-      x: n.x ? (n.x * width/2 + width/2) : Math.random() * width,
-      y: n.y ? (n.y * height/2 + height/2) : Math.random() * height
+      x: typeof n.x === 'number' ? (n.x * width / 2 + width / 2) : Math.random() * width,
+      y: typeof n.y === 'number' ? (n.y * height / 2 + height / 2) : Math.random() * height,
     }));
 
     const linkData = edges.map(e => ({
-      ...e,
+      ...e,                                // keep link props (weight/type/etc.)
       source: String(e.source),
-      target: String(e.target)
+      target: String(e.target),
     }));
+
 
     const weightScale = d3.scaleLinear().domain([0, 1]).range([0.1, 1]);
 
@@ -143,7 +145,7 @@ export default function GraphVisualization({
     node.append('text')
       .text(d => d.label || `Note ${d.id}`)
       .attr('y', -15)
-      .style('font-size', '12px')
+      .style('font-size', '8px')
       .style('font-weight', '500')
       .style('fill', '#e5e7eb')
       .style('text-anchor', 'middle')

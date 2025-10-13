@@ -7,8 +7,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    host: true,        // <— add this
     open: true,
-    // Proxy API requests to your FastAPI backend
+    // Proxy API requests to the FastAPI backend
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
