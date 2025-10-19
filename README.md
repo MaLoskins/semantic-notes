@@ -1,34 +1,34 @@
-# Semantic Embedding Graph Engine — Python Backend
+# Semantic Embedding Graph Engine & UI
 
-High‑performance FastAPI backend that turns raw text into semantic embeddings, computes similarities,
-and returns a JSON graph (nodes + edges) ready for D3.js / ReactFlow / Cytoscape.
+## Dashboard
 
-## Features
-- ⚡ **Fast local embeddings** via `sentence-transformers/all-MiniLM-L6-v2` (default, 384‑D)
-- 🔁 Batch encoding + LRU cache (hash‑keyed by text) to avoid recomputation
-- 🧮 Cosine similarity (threshold or k‑nearest neighbors)
-- 🗺️ Optional **dimensionality reduction** (PCA default, UMAP/t‑SNE supported)
-- 🧩 Optional **clustering** (KMeans / Agglomerative)
-- 🧠 Pluggable backends (Sentence‑Transformers by default; OpenAI optional)
-- 🌐 CORS enabled — easy to call from React/Flask front‑ends
-
----
+![Dashboard](Dashboard.png)
 
 ## Quick Start
 
 ```bash
 # 1) Python 3.10+ recommended
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 
 # 2) Install deps
 pip install -r requirements.txt
 
 # 3) Run the server
-uvicorn main:app --reload
+python main.py
 ```
 
-Server runs on `http://localhost:8000` by default.
+New terminal:
+
+```
+cd semantic-notes-app
+# 1) Install deps
+npm install
+# 2) Start server
+npm run dev
+
+```
+Server runs on `http://localhost:3000` by default.
 
 ---
 
