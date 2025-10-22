@@ -90,9 +90,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Semantic Embedding Graph Engine", version="1.2.1", lifespan=lifespan)
 
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
+
+# Diagnostic logging
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+print(f"[STARTUP] FRONTEND_ORIGIN: {frontend_origin}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
+    allow_origins=[frontend_origin],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -113,9 +126,26 @@ async def import_notes(
     Returns: { "imported": count, "id_mapping": {old_id: new_id} }
     """
     try:
-        data = await request.json()
-        notes_to_import = data.get("notes", [])
-        trash_to_import = data.get("trash", [])
+        from pydantic import BaseModel, ValidationError, conlist
+
+        class ImportNoteSchema(BaseModel):
+            title: str
+            content: str
+            tags: str | None = ""
+            is_deleted: bool | None = False
+
+        class ImportRequest(BaseModel):
+            notes: conlist(ImportNoteSchema, min_length=0) = []
+            trash: conlist(ImportNoteSchema, min_length=0) = []
+
+        try:
+            raw_data = await request.json()
+            data = ImportRequest(**raw_data)
+        except ValidationError as e:
+            raise HTTPException(status_code=400, detail=e.errors())
+
+        notes_to_import = data.notes
+        trash_to_import = data.trash
 
         if not notes_to_import and not trash_to_import:
             return {"imported": 0, "id_mapping": {}}

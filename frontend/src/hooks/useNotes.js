@@ -88,11 +88,15 @@ export function useNotes() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      loadNotesFromDatabase();
-    } else {
-      loadFromLocal();
-    }
+    const initNotes = async () => {
+      if (isAuthenticated) {
+        await loadNotesFromDatabase();
+      } else {
+        loadFromLocal();
+      }
+    };
+
+    initNotes();
   }, [isAuthenticated]);
 
   const loadNotesFromDatabase = async () => {

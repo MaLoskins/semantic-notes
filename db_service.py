@@ -7,19 +7,23 @@ from auth import hash_password, verify_password
 # -------------------- USER OPERATIONS -------------------- #
 
 def create_user(db: Session, username: str, password: str, email: str = None) -> User:
-    existing_user = db.query(User).filter(User.username == username).first()
-    if existing_user:
-        raise ValueError("User already exists")
-    user = User(
-        username=username,
-        password_hash=hash_password(password),
-        email=email,
-        created_at=datetime.utcnow()
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return user
+    try:
+        existing_user = db.query(User).filter(User.username == username).first()
+        if existing_user:
+            raise ValueError("User already exists")
+        user = User(
+            username=username,
+            password_hash=hash_password(password),
+            email=email,
+            created_at=datetime.utcnow()
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def get_user_by_username(db: Session, username: str) -> User | None:
@@ -55,31 +59,39 @@ def get_note_by_id(db: Session, note_id: int, user_id: int) -> Note | None:
 
 
 def create_note(db: Session, user_id: int, title: str, content: str, tags: str = "") -> Note:
-    note = Note(
-        user_id=user_id,
-        title=title,
-        content=content,
-        tags=tags,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
-    db.add(note)
-    db.commit()
-    db.refresh(note)
-    return note
+    try:
+        note = Note(
+            user_id=user_id,
+            title=title,
+            content=content,
+            tags=tags,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(note)
+        db.commit()
+        db.refresh(note)
+        return note
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def update_note(db: Session, note_id: int, user_id: int, title: str, content: str, tags: str) -> Note | None:
-    note = get_note_by_id(db, note_id, user_id)
-    if not note or note.is_deleted:
-        return None
-    note.title = title
-    note.content = content
-    note.tags = tags
-    note.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(note)
-    return note
+    try:
+        note = get_note_by_id(db, note_id, user_id)
+        if not note or note.is_deleted:
+            return None
+        note.title = title
+        note.content = content
+        note.tags = tags
+        note.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(note)
+        return note
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def soft_delete_note(db: Session, note_id: int, user_id: int) -> bool:
@@ -93,13 +105,18 @@ def soft_delete_note(db: Session, note_id: int, user_id: int) -> bool:
 
 
 def restore_note(db: Session, note_id: int, user_id: int) -> bool:
-    note = get_note_by_id(db, note_id, user_id)
-    if not note or not note.is_deleted:
-        return False
-    note.is_deleted = False
-    note.deleted_at = None
-    db.commit()
-    return True
+    try:
+        note = get_note_by_id(db, note_id, user_id)
+        if not note or not note.is_deleted:
+            return False
+        note.is_deleted = False
+        note.deleted_at = None
+        note.updated_at = datetime.utcnow()
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        raise e
 
 
 def permanent_delete_note(db: Session, note_id: int, user_id: int) -> bool:
@@ -184,10 +201,17 @@ def bulk_create_notes(db: Session, user_id: int, notes_list: list[dict]) -> dict
             created_at = note_data.get('createdAt') or note_data.get('created_at')
             updated_at = note_data.get('updatedAt') or note_data.get('updated_at')
 
+            from datetime import timezone
+
             if isinstance(created_at, str):
                 created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            if created_at and created_at.tzinfo is not None:
+                created_at = created_at.astimezone(timezone.utc).replace(tzinfo=None)
+
             if isinstance(updated_at, str):
                 updated_at = datetime.fromisoformat(updated_at.replace('Z', '+00:00'))
+            if updated_at and updated_at.tzinfo is not None:
+                updated_at = updated_at.astimezone(timezone.utc).replace(tzinfo=None)
 
             new_note = Note(
                 user_id=user_id,

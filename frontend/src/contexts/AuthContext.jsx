@@ -10,22 +10,35 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token');
-    const storedUser = localStorage.getItem('auth_user');
-    
-    if (storedToken && storedUser) {
+    const validateAndRestoreSession = async () => {
+      const storedToken = localStorage.getItem('auth_token');
+      if (!storedToken) {
+        setLoading(false);
+        return;
+      }
+
+      apiService.setAuthToken(storedToken);
+
       try {
-        const userData = JSON.parse(storedUser);
-        setToken(storedToken);
-        setUser(userData);
-        setIsAuthenticated(true);
-        apiService.setAuthToken(storedToken);
+        const userResponse = await apiService.request('/api/auth/me');
+        if (userResponse && userResponse.username) {
+          setUser({ username: userResponse.username, userId: userResponse.user_id });
+          setToken(storedToken);
+          setIsAuthenticated(true);
+        } else {
+          throw new Error('Invalid token');
+        }
       } catch (error) {
+        console.error('Token validation failed:', error);
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
+        setIsAuthenticated(false);
+      } finally {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    };
+
+    validateAndRestoreSession();
   }, []);
 
   const login = async (username, password) => {

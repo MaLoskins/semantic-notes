@@ -1,8 +1,8 @@
 const EMB_LS_KEY = 'semantic-emb-cache-v1';
 
 class APIService {
-  constructor(baseUrl = 'http://localhost:8000') {
-    this.baseUrl = baseUrl.replace(/\/$/, '');
+  constructor(baseUrl = import.meta.env.VITE_API_BASE_URL) {
+    this.baseUrl = (baseUrl || '').replace(/\/$/, '');
     // Embedding cache: { [noteId]: { h: number, v: number[] } }
     this._embCache = this._loadEmbCache();
   }

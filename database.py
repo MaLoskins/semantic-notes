@@ -11,7 +11,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Create SQLAlchemy engine
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=15, max_overflow=30)
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -24,9 +24,20 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as e:
+        db.rollback()
+        raise e
     finally:
         db.close()
 
 # Initialize database tables
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database initialized and tables created successfully.")
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        raise

@@ -33,7 +33,15 @@ export default function LoginForm() {
         await register(username, password, email);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Authentication failed');
+      let message = 'Authentication failed';
+      if (err instanceof Error) {
+        message = err.message;
+      } else if (typeof err === 'string') {
+        message = err;
+      } else if (err && err.detail) {
+        message = err.detail;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }

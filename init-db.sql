@@ -1,3 +1,7 @@
+-- Ensure the correct database exists
+CREATE DATABASE semantic_notes;
+
+\c semantic_notes
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,

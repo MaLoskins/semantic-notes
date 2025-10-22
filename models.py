@@ -11,7 +11,7 @@ class User(Base):
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     email = Column(String(255))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login = Column(DateTime)
 
     notes = relationship("Note", back_populates="user", cascade="all, delete-orphan")
@@ -25,7 +25,7 @@ class Note(Base):
     title = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     tags = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)
@@ -42,6 +42,6 @@ class Embedding(Base):
     content_hash = Column(String(64), nullable=False)
     embedding_vector = Column(ARRAY(Float), nullable=False)
     model_name = Column(String(100), default="sentence-transformers/all-MiniLM-L6-v2")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     note = relationship("Note", back_populates="embedding")
