@@ -333,35 +333,31 @@ export function useNotes() {
     }
   }, [isAuthenticated, notes]);
   
-  const importNotes = useCallback((incomingNotes, mode = 'merge') => {
+  const importNotes = useCallback(async (incomingNotes) => {
     if (!Array.isArray(incomingNotes)) {
       throw new Error('Invalid import format: expected notes array');
     }
-    const normalized = incomingNotes.map(n => normalizeNote(n));
-    if (mode === 'replace') {
-      setNotes(normalized);
-      return { imported: normalized.length, mode };
-    }
-    if (mode === 'merge') {
-      setNotes(prev => {
-        const existingIds = new Set(prev.map(n => n.id));
-        const merged = [...prev];
-        for (const note of normalized) {
-          let id = note.id;
-          if (existingIds.has(id)) {
-            do {
-              id = generateRandomId();
-            } while (existingIds.has(id));
-          }
-          existingIds.add(id);
-          merged.push({ ...note, id });
-        }
-        return merged;
+    try {
+      const response = await dbApi.importNotes(incomingNotes);
+      const { notes: importedNotes, id_mapping } = response;
+
+      // Apply new IDs using mapping
+      const updatedNotes = incomingNotes.map(note => {
+        const newId = id_mapping[note.id];
+        return newId ? { ...note, id: newId } : note;
       });
-      return { imported: normalized.length, mode };
+
+      // Update state and local storage
+      setNotes(updatedNotes);
+      saveAllToStorage(updatedNotes, trashedNotes);
+
+      return { success: true, imported: importedNotes.length };
+    } catch (err) {
+      console.error('Failed to import notes:', err);
+      setError('Failed to import notes');
+      throw err;
     }
-    throw new Error('Invalid import mode');
-  }, []);
+  }, [trashedNotes]);
   
   const searchNotes = useCallback((term) => {
     if (!term) return notes;

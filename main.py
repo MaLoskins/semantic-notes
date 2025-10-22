@@ -1,44 +1,20 @@
+# backend/main.py
 from __future__ import annotations
-
-# --- Set loky env + silence its Windows warning BEFORE any 3rd-party imports ---
+from typing import Any, Dict, List, Optional, Literal
+import importlib.util as _importlib
 import os as _os
-import warnings as _warnings
-
-if "LOKY_MAX_CPU_COUNT" not in _os.environ:
-    try:
-        _os.environ["LOKY_MAX_CPU_COUNT"] = str(_os.cpu_count() or 1)
-    except Exception:
-        _os.environ["LOKY_MAX_CPU_COUNT"] = "1"
-
-# Silence only the specific loky UserWarning about physical cores on Windows
-_warnings.filterwarnings(
-    "ignore",
-    message="Could not find the number of physical cores",
-    category=UserWarning,
-    module=r"joblib\.externals\.loky\.backend\.context",
-)
-
-# -------------------------------------------------------------------------------
-
-from typing import List, Optional, Literal, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import importlib.util
-import numpy as np
-
-from embedding_service import get_embedding_service
-from graph_service import build_similarity_graph
-from database import get_db, init_db
-from models import User, Note, Embedding
-from auth import hash_password, create_access_token, get_current_user
-import db_service
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from fastapi import Depends, HTTPException, status
 
+from database import init_db, get_db
+from models import User
+import db_service
+from embedding_service import get_embedding_service
+from auth import create_access_token, get_current_user
 
 # ---------- Pydantic Schemas ----------
 
@@ -66,11 +42,10 @@ class GraphResponse(BaseModel):
     nodes: List[Dict[str, Any]]
     edges: List[Dict[str, Any]]
 
-
 # ---------- App Setup ----------
 
 def _has_module(name: str) -> bool:
-    return importlib.util.find_spec(name) is not None
+    return _importlib.find_spec(name) is not None
 
 
 @asynccontextmanager
@@ -90,14 +65,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Semantic Embedding Graph Engine", version="1.2.1", lifespan=lifespan)
 
-import os
 from dotenv import load_dotenv
-
-# Load environment variables from .env
 load_dotenv()
 
 # Diagnostic logging
-frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+frontend_origin = _os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
 print(f"[STARTUP] FRONTEND_ORIGIN: {frontend_origin}")
 
 app.add_middleware(
@@ -108,11 +80,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # ---------- Routes ----------
-
-from fastapi import Request
-
 
 @app.post("/api/notes/import")
 async def import_notes(
@@ -126,13 +94,22 @@ async def import_notes(
     Returns: { "imported": count, "id_mapping": {old_id: new_id} }
     """
     try:
-        from pydantic import BaseModel, ValidationError, conlist
+        from pydantic import BaseModel, ValidationError, conlist, ConfigDict
+        from datetime import datetime
 
         class ImportNoteSchema(BaseModel):
+            # Accept plain notes from local export (id is created server-side)
             title: str
             content: str
-            tags: str | None = ""
-            is_deleted: bool | None = False
+            tags: Optional[str] = ""
+            is_deleted: Optional[bool] = False
+            # Accept optional timestamps commonly present in exports
+            createdAt: Optional[datetime] = None
+            updatedAt: Optional[datetime] = None
+            deletedAt: Optional[datetime] = None
+            deleted_at: Optional[datetime] = None
+
+            model_config = ConfigDict(extra="ignore")  # ignore other client-only fields
 
         class ImportRequest(BaseModel):
             notes: conlist(ImportNoteSchema, min_length=0) = []
@@ -142,39 +119,62 @@ async def import_notes(
             raw_data = await request.json()
             data = ImportRequest(**raw_data)
         except ValidationError as e:
-            raise HTTPException(status_code=400, detail=e.errors())
+            # validation errors bubble as 400
+            raise HTTPException(status_code=400, detail=e.errors())  # <- current behavior :contentReference[oaicite:5]{index=5}
 
-        notes_to_import = data.notes
-        trash_to_import = data.trash
+        notes_to_import: List[Dict[str, Any]] = []
+        for note in data.notes:
+            d = note.model_dump(by_alias=True)
+            # map timestamps to server-friendly field names (snake_case on server)
+            created = d.get("createdAt")
+            updated = d.get("updatedAt")
+            item = {
+                "title": d.get("title", ""),
+                "content": d.get("content", ""),
+                "tags": d.get("tags", "") or "",
+                "is_deleted": False,
+                "deleted_at": None,
+                "created_at": created,
+                "updated_at": updated or created,
+            }
+            notes_to_import.append(item)
 
-        if not notes_to_import and not trash_to_import:
-            return {"imported": 0, "id_mapping": {}}
+        trash_to_import: List[Dict[str, Any]] = []
+        for trash_note in data.trash:
+            d = trash_note.model_dump(by_alias=True)
+            deleted_at = d.get("deletedAt") or d.get("deleted_at")
+            created = d.get("createdAt")
+            updated = d.get("updatedAt") or created
+            item = {
+                "title": d.get("title", ""),
+                "content": d.get("content", ""),
+                "tags": d.get("tags", "") or "",
+                "is_deleted": True,
+                "deleted_at": deleted_at,
+                "created_at": created,
+                "updated_at": updated,
+            }
+            trash_to_import.append(item)
 
-        id_mapping = {}
+        id_mapping: Dict[int, int] = {}
         if notes_to_import:
             id_mapping = db_service.bulk_create_notes(db, current_user.id, notes_to_import)
 
-        trash_mapping = {}
         if trash_to_import:
-            trash_notes = []
-            for trash_note in trash_to_import:
-                trash_note_copy = trash_note.copy()
-                trash_note_copy['is_deleted'] = True
-                trash_note_copy['deleted_at'] = trash_note.get('deletedAt') or trash_note.get('deleted_at')
-                trash_notes.append(trash_note_copy)
-
-            trash_mapping = db_service.bulk_create_notes(db, current_user.id, trash_notes)
+            trash_mapping = db_service.bulk_create_notes(db, current_user.id, trash_to_import)
             id_mapping.update(trash_mapping)
 
         total_imported = len(notes_to_import) + len(trash_to_import)
+        return {"imported": total_imported, "id_mapping": id_mapping}
 
-        return {
-            "imported": total_imported,
-            "id_mapping": id_mapping
-        }
-
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+        # Previously this path produced: "Import failed: 'ImportNoteSchema' object has no attribute 'get'"
+        # because we treated Pydantic models like dicts. Fixed by using model_dump().
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")  # prior bug site :contentReference[oaicite:6]{index=6}
+
+
 @app.get("/api/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
@@ -195,9 +195,7 @@ def stats() -> Dict[str, Any]:
 @app.post("/api/embed", response_model=EmbedResponse)
 def embed(req: EmbedRequest) -> EmbedResponse:
     if not req.documents:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="No documents provided")
-
     service = get_embedding_service()
     vecs = service.encode(req.documents)
     return EmbedResponse(embeddings=vecs.tolist())
@@ -206,7 +204,6 @@ def embed(req: EmbedRequest) -> EmbedResponse:
 @app.post("/api/graph", response_model=GraphResponse)
 def graph(req: GraphRequest) -> GraphResponse:
     if not req.documents:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="No documents provided")
 
     threshold = req.threshold
@@ -214,6 +211,8 @@ def graph(req: GraphRequest) -> GraphResponse:
 
     service = get_embedding_service()
     X = service.encode(req.documents)
+
+    from graph_service import build_similarity_graph
 
     graph_dict = build_similarity_graph(
         embeddings=X,
@@ -255,13 +254,21 @@ class NoteRequest(BaseModel):
     tags: str = ""
 
 
+from datetime import datetime
+from pydantic import ConfigDict
+
 class NoteResponse(BaseModel):
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )
+
     id: int
     title: str
     content: str
     tags: str
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     is_deleted: bool
 
 

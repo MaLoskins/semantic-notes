@@ -150,6 +150,30 @@ export default function App() {
     window.addEventListener('resize', updateDimensions);
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
+  
+  // Recalculate dimensions when graph data changes or notes length changes
+
+  useEffect(() => {
+  if (graphRef.current && (graphData || notes.length > 0)) {
+    // Small delay to ensure DOM has fully rendered and settled
+    const timer = setTimeout(() => {
+      if (graphRef.current) {
+        const newWidth = graphRef.current.clientWidth;
+        const newHeight = graphRef.current.clientHeight;
+        
+        // Only update if dimensions actually changed to avoid unnecessary re-renders
+        setDimensions(prev => {
+          if (prev.width !== newWidth || prev.height !== newHeight) {
+            return { width: newWidth, height: newHeight };
+          }
+          return prev;
+        });
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }
+}, [graphData, notes.length]);
 
   // Generate graph with debouncing
   useEffect(() => {
