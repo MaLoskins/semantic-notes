@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import AuthGuard from './components/AuthGuard';
 import NoteEditor from './components/NoteEditor';
 import NotesList from './components/NotesList';
 import GraphVisualization from './components/GraphVisualization';
@@ -10,7 +12,7 @@ import ToastNotification from './components/ToastNotification';
 import TrashView from './components/TrashView';
 import UnsavedChangesDialog from './components/UnsavedChangesDialog';
 import SimilarNotesModal from './components/SimilarNotesModal';
- 
+import ImportLocalNotesModal from './components/ImportLocalNotesModal';
 const GRAPH_UPDATE_DEBOUNCE = 500;
 const SEMANTIC_QUERY_DEBOUNCE = 500;
 const MIN_SEM_QUERY_LEN = 3;
@@ -573,9 +575,43 @@ export default function App() {
   
   const stats = getStats();
 
+  const { user, logout, isAuthenticated } = useAuth();
+
+   // LocalStorage import modal logic
+   const [showImportLocalModal, setShowImportLocalModal] = useState(false);
+   useEffect(() => {
+     if (isAuthenticated && user) {
+       const hasCheckedImport = localStorage.getItem('import-checked');
+       if (!hasCheckedImport) {
+         const notesData = localStorage.getItem('semantic-notes-data');
+         const trashData = localStorage.getItem('semantic-notes-trash');
+         if (notesData || trashData) {
+           setShowImportLocalModal(true);
+         }
+         localStorage.setItem('import-checked', 'true');
+       }
+     }
+   }, [isAuthenticated, user]);
+
+   const handleImportComplete = (importedCount) => {
+     setShowImportLocalModal(false);
+     window.location.reload();
+   };
+
+   const handleImportSkip = () => {
+     setShowImportLocalModal(false);
+   };
+
   return (
-    <div className="app">
-      <header className="app-header">
+    <AuthGuard>
+       {showImportLocalModal && (
+         <ImportLocalNotesModal
+           onClose={handleImportSkip}
+           onImportComplete={handleImportComplete}
+         />
+       )}
+      <div className="app">
+        <header className="app-header">
         <h1>Semantic Notes</h1>
         
         <div className="header-actions">
@@ -663,6 +699,18 @@ export default function App() {
             <span className={`status-indicator ${connected ? '' : 'disconnected'}`} />
             {connected ? 'Connected' : 'Disconnected'}
           </div>
+          {isAuthenticated && user && (
+            <div className="user-section">
+              <span className="username">👤 {user.username}</span>
+              <button
+                onClick={logout}
+                className="logout-button"
+                title="Logout"
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -852,5 +900,6 @@ export default function App() {
         onCancel={cancelDialog}
       />
     </div>
+    </AuthGuard>
   );
 }

@@ -7,14 +7,28 @@ class APIService {
     this._embCache = this._loadEmbCache();
   }
 
+  // Add token storage
+  static authToken = null;
+
+  setAuthToken(token) {
+    APIService.authToken = token;
+  }
+
   async request(endpoint, options = {}) {
+    const url = `${this.baseUrl}${endpoint}`;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (APIService.authToken) {
+      headers['Authorization'] = `Bearer ${APIService.authToken}`;
+    }
+
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers
-        },
-        ...options
+      const response = await fetch(url, {
+        ...options,
+        headers,
       });
 
       if (!response.ok) {
@@ -165,45 +179,95 @@ class APIService {
     return emb;
   }
 
-  async getEmbeddingsForNotes(notes) {
-    if (!Array.isArray(notes) || notes.length === 0) return [];
-
-    const results = new Array(notes.length).fill(null);
-    const toComputeIdxs = [];
-    const toComputeDocs = [];
-
-    notes.forEach((note, i) => {
-      const id = note?.id;
-      const h = this.hashNote(note);
-      const cached = id != null ? this._embCache[id] : undefined;
-      if (cached && cached.h === h && Array.isArray(cached.v)) {
-        results[i] = cached.v;
-      } else {
-        toComputeIdxs.push(i);
-        toComputeDocs.push(this.getNoteText(note));
-      }
-    });
-
-    if (toComputeDocs.length > 0) {
-      const res = await this.embedDocuments(toComputeDocs);
-      const vecs = res?.embeddings || [];
-      if (vecs.length !== toComputeDocs.length) {
-        throw new Error('Embedding service returned mismatched vector count');
-      }
-      // Map back and update cache for notes with stable ids
-      toComputeIdxs.forEach((noteIdx, j) => {
-        const v = vecs[j];
-        results[noteIdx] = v;
-        const note = notes[noteIdx];
-        const id = note?.id;
-        if (id != null) {
-          this._embCache[id] = { h: this.hashNote(note), v };
-        }
+  async saveEmbeddingsToDatabase(embeddings) {
+    try {
+      await this.request('/api/embeddings/batch', {
+        method: 'POST',
+        body: JSON.stringify({ embeddings }),
       });
+    } catch (error) {
+      console.error('Failed to save embeddings to database:', error);
+    }
+  }
+
+  async fetchEmbeddingsFromDatabase(noteIds) {
+    try {
+      const response = await this.request(`/api/embeddings?note_ids=${noteIds.join(',')}`);
+      return response.embeddings || {};
+    } catch (error) {
+      console.error('Failed to fetch embeddings from database:', error);
+      return {};
+    }
+  }
+
+  async getEmbeddingsForNotes(notes) {
+    if (!notes || notes.length === 0) return {};
+
+    const cache = this._loadEmbCache();
+    const embeddings = {};
+    const notesToCompute = [];
+    const notesToFetchFromDb = [];
+    const authToken = APIService.authToken;
+
+    for (const note of notes) {
+      const cached = cache[note.id];
+      const noteHash = this.hashNote(note);
+      if (cached && cached.h === noteHash) {
+        embeddings[note.id] = cached.v;
+      } else if (authToken) {
+        notesToFetchFromDb.push(note);
+      } else {
+        notesToCompute.push(note);
+      }
+    }
+
+    if (notesToFetchFromDb.length > 0 && authToken) {
+      const noteIds = notesToFetchFromDb.map(n => n.id);
+      const dbEmbeddings = await this.fetchEmbeddingsFromDatabase(noteIds);
+
+      for (const note of notesToFetchFromDb) {
+        const dbEmb = dbEmbeddings[note.id];
+        const noteHash = this.hashNote(note);
+        if (dbEmb && dbEmb.content_hash === noteHash) {
+          embeddings[note.id] = dbEmb.embedding;
+          cache[note.id] = { h: noteHash, v: dbEmb.embedding };
+        } else {
+          notesToCompute.push(note);
+        }
+      }
       this._saveEmbCache();
     }
 
-    return results;
+    if (notesToCompute.length > 0) {
+      const texts = notesToCompute.map(n => this.getNoteText(n));
+      const res = await this.embedDocuments(texts);
+      const vecs = res.embeddings || [];
+      for (let i = 0; i < notesToCompute.length; i++) {
+        const note = notesToCompute[i];
+        embeddings[note.id] = vecs[i];
+        cache[note.id] = { h: this.hashNote(note), v: vecs[i] };
+      }
+      this._saveEmbCache();
+
+      if (authToken && notesToCompute.length > 0) {
+        const embeddingsToSave = notesToCompute
+          .filter(n => embeddings[n.id])
+          .map(n => ({
+            note_id: n.id,
+            content_hash: this.hashNote(n),
+            embedding: embeddings[n.id],
+            model_name: 'sentence-transformers/all-MiniLM-L6-v2',
+          }));
+
+        if (embeddingsToSave.length > 0) {
+          this.saveEmbeddingsToDatabase(embeddingsToSave).catch(err =>
+            console.error('Background embedding sync failed:', err)
+          );
+        }
+      }
+    }
+
+    return embeddings;
   }
 
   // Safe cosine similarity (normalizes if needed)
@@ -219,6 +283,27 @@ class APIService {
     }
     if (na === 0 || nb === 0) return 0;
     return dot / (Math.sqrt(na) * Math.sqrt(nb));
+  }
+  
+  async register(username, password, email = null) {
+    const response = await this.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, email }),
+    });
+    return response;
+  }
+
+  async login(username, password) {
+    const response = await this.request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    });
+    return response;
+  }
+
+  async getCurrentUser() {
+    const response = await this.request('/api/auth/me');
+    return response;
   }
 }
 
