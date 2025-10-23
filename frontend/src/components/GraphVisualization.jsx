@@ -1,10 +1,18 @@
-import React, { useEffect, useRef, useState } from 'react';
+// GraphVisualization.jsx
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import GraphControlsPanel from './GraphControlsPanel';
 import ExportGraphModal from './ExportGraphModal';
 import ToastNotification from './ToastNotification';
 
-const COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+const COLORS = ['#e6194b','#3cb44b','#ffe119','#0082c8','#f58231','#911eb4','#46f0f0','#f032e6','#d2f53c','#fabebe','#008080','#e6beff','#aa6e28','#fffac8','#800000'];
+
+// Tunables
+const NODE_R = 12;
+const COLLIDE_R = 18;
+const LABEL_ZOOM_THRESHOLD = 0.8;  // show link labels only when zoomed in
+const MAX_CHARGE_DISTANCE = 600;   // cap n-body computations
+const TARGET_FPS_MS = 16;          // ~60fps
 
 export default function GraphVisualization({
   graphData,
@@ -20,7 +28,14 @@ export default function GraphVisualization({
   panelPosition = 'bottom-left'
 }) {
   const svgRef = useRef(null);
+  const gRootRef = useRef(null);
+  const gLinksRef = useRef(null);
+  const gLinkLabelsRef = useRef(null);
+  const gNodesRef = useRef(null);
+
   const simulationRef = useRef(null);
+  const zoomBehaviorRef = useRef(null);
+
   const [hoveredNode, setHoveredNode] = useState(null);
   const [isRunning, setIsRunning] = useState(true);
 
@@ -29,190 +44,261 @@ export default function GraphVisualization({
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
-  useEffect(() => {
-    if (!graphData || !svgRef.current) return;
-
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
-
-    const { nodes, edges } = graphData;
-    if (!nodes || nodes.length === 0) return;
-
-    const g = svg.append('g');
-    
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 10])
-      .on('zoom', (event) => g.attr('transform', event.transform));
-    
-    svg.call(zoom);
-
-    const nodeData = nodes.map(n => ({
+  // --------- Data prep (memoized) ----------
+  const { nodesMemo, linksMemo } = useMemo(() => {
+    const nodes = (graphData?.nodes || []).map(n => ({
       ...n,
       id: String(n.id),
+      // Normalize any precomputed [-1,1] space to actual px, else random seed
       x: typeof n.x === 'number' ? (n.x * width / 2 + width / 2) : Math.random() * width,
-      y: typeof n.y === 'number' ? (n.y * height / 2 + height / 2) : Math.random() * height,
+      y: typeof n.y === 'number' ? (n.y * height / 2 + height / 2) : Math.random() * height
     }));
 
-    const linkData = edges.map(e => ({
+    const edges = (graphData?.edges || []).map(e => ({
       ...e,
       source: String(e.source),
       target: String(e.target),
+      weight: typeof e.weight === 'number' ? e.weight : 0.5
     }));
 
-    const weightScale = d3.scaleLinear().domain([0, 1]).range([0.1, 1]);
+    return { nodesMemo: nodes, linksMemo: edges };
+  }, [graphData, width, height]);
 
-    const simulation = d3.forceSimulation(nodeData)
-      .force('link', d3.forceLink(linkData)
-        .id(d => d.id)
-        .distance(d => 120 * (1 - (d.weight || 0.5)))
-        .strength(d => weightScale(d.weight || 0.5)))
-      .force('charge', d3.forceManyBody().strength(-400).distanceMax(250))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(35).strength(0.7))
-      .force('x', d3.forceX(width / 2).strength(0.05))
-      .force('y', d3.forceY(height / 2).strength(0.05));
+  // --------- Build / (re)build scene ----------
+  useEffect(() => {
+    if (!svgRef.current || !nodesMemo.length) return;
 
-    simulationRef.current = simulation;
+    const svg = d3.select(svgRef.current);
 
-    const defs = svg.append('defs');
-    linkData.forEach((d, i) => {
-      const gradient = defs.append('linearGradient')
-        .attr('id', `grad-${i}`)
-        .attr('gradientUnits', 'userSpaceOnUse');
-      
-      gradient.append('stop')
-        .attr('offset', '0%')
-        .attr('stop-color', '#4a5568')
-        .attr('stop-opacity', 0.2);
-      gradient.append('stop')
-        .attr('offset', '50%')
-        .attr('stop-color', '#4a5568')
-        .attr('stop-opacity', weightScale(d.weight || 0.5));
-      gradient.append('stop')
-        .attr('offset', '100%')
-        .attr('stop-color', '#4a5568')
-        .attr('stop-opacity', 0.2);
-    });
+    // Clear once per graphData change
+    svg.selectAll('*').remove();
 
-    const link = g.append('g')
-      .selectAll('line')
-      .data(linkData)
-      .enter().append('line')
-      .attr('stroke', (d, i) => `url(#grad-${i})`)
-      .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 4))
-      .style('pointer-events', 'none');
+    // Root group for zoom/pan
+    const gRoot = svg.append('g').attr('class', 'graph-root');
+    gRootRef.current = gRoot;
 
-    const linkLabels = g.append('g')
-      .selectAll('text')
-      .data(linkData.filter(d => d.weight > 0.5))
-      .enter().append('text')
-      .text(d => d.weight.toFixed(2))
-      .style('font-size', '10px')
-      .style('fill', '#6b7280')
-      .style('text-anchor', 'middle')
-      .style('pointer-events', 'none');
+    // Layers (links under nodes)
+    const gLinks = gRoot.append('g').attr('class', 'layer links');
+    const gLinkLabels = gRoot.append('g').attr('class', 'layer link-labels').attr('opacity', 0);
+    const gNodes = gRoot.append('g').attr('class', 'layer nodes');
 
-    const node = g.append('g')
-      .selectAll('g')
-      .data(nodeData)
-      .enter().append('g')
-      .style('cursor', 'pointer')
-      .call(d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended));
+    gLinksRef.current = gLinks;
+    gLinkLabelsRef.current = gLinkLabels;
+    gNodesRef.current = gNodes;
 
-    node.append('circle')
-      .attr('r', d => d.id === String(selectedNote) ? 12 : 10)
-      .attr('fill', d => {
-        if (d.id === String(selectedNote)) return '#10b981';
-        if (d.cluster !== undefined) return COLORS[d.cluster % COLORS.length];
-        return COLORS[0];
-      })
-      .attr('stroke', '#1f2937')
-      .attr('stroke-width', 2)
-      .style('filter', 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))');
-
-    node.append('text')
-      .text(d => d.label || `Note ${d.id}`)
-      .attr('y', -15)
-      .style('font-size', '8px')
-      .style('font-weight', '500')
-      .style('fill', '#e5e7eb')
-      .style('text-anchor', 'middle')
-      .style('pointer-events', 'none')
-      .style('filter', 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8))');
-
-    node.on('click', (event, d) => {
-        event.stopPropagation();
-        onNodeClick(parseInt(d.id));
-      })
-      .on('mouseenter', (event, d) => {
-        setHoveredNode(d);
-        d3.select(event.currentTarget).select('circle')
-          .transition().duration(200)
-          .attr('r', 14)
-          .attr('stroke-width', 3);
-      })
-      .on('mouseleave', (event, d) => {
-        setHoveredNode(null);
-        d3.select(event.currentTarget).select('circle')
-          .transition().duration(200)
-          .attr('r', d.id === String(selectedNote) ? 12 : 10)
-          .attr('stroke-width', 2);
+    // Zoom (persist between updates)
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 10])
+      .on('zoom', (event) => {
+        gRoot.attr('transform', event.transform);
+        // toggle link-label visibility at zoom threshold to reduce DOM cost
+        gLinkLabels.attr('opacity', event.transform.k >= LABEL_ZOOM_THRESHOLD ? 1 : 0);
       });
 
-    simulation.on('tick', () => {
-      link
+    zoomBehaviorRef.current = zoom;
+    svg.call(zoom);
+
+    // Scales (constant functions are cheaper than re-styling on every tick)
+    const widthScale = d3.scaleLinear().domain([0, 1]).range([1, 4]);
+    const alphaScale = d3.scaleLinear().domain([0, 1]).range([0.25, 0.9]);
+
+    // Selections (stable across ticks)
+    const linkSel = gLinks.selectAll('line')
+      .data(linksMemo)
+      .join('line')
+      .attr('class', 'link')
+      .attr('stroke', '#4a5568')
+      .attr('stroke-linecap', 'round')
+      .attr('stroke-opacity', d => alphaScale(d.weight))
+      .attr('stroke-width', d => widthScale(d.weight))
+      .style('pointer-events', 'none');
+
+    // Only attach labels for heavier links; hide until zoomed in
+    const labelSel = gLinkLabels.selectAll('text')
+      .data(linksMemo.filter(d => d.weight > 0.4))
+      .join('text')
+      .attr('class', 'link-label')
+      .text(d => d.weight.toFixed(2))
+      .attr('font-size', 10)
+      .attr('fill', '#9aa0a6')
+      .attr('text-anchor', 'middle')
+      .style('pointer-events', 'none');
+
+    const drag = d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active && simulationRef.current) simulationRef.current.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      })
+      .on('drag', (event, d) => {
+        d.fx = event.x;
+        d.fy = event.y;
+      })
+      .on('end', (event, d) => {
+        if (!event.active && simulationRef.current) simulationRef.current.alphaTarget(0);
+        // Hold with Shift, otherwise release
+        if (!event.sourceEvent.shiftKey) {
+          d.fx = null;
+          d.fy = null;
+        }
+      });
+
+    const nodeGSel = gNodes.selectAll('g.node')
+      .data(nodesMemo, d => d.id)
+      .join(enter => {
+        const g = enter.append('g')
+          .attr('class', 'node')
+          .style('cursor', 'pointer')
+          .call(drag);
+
+        g.append('circle')
+          .attr('r', NODE_R)
+          .attr('fill', d => (d.cluster !== undefined ? COLORS[d.cluster % COLORS.length] : COLORS[0]))
+          .attr('stroke', d => d.id === String(selectedNote) ? '#ffffff' : '#1f2937')
+          .attr('stroke-width', d => d.id === String(selectedNote) ? 3 : 1.5);
+
+        // Very small labels to keep DOM light; text is expensive
+        g.append('text')
+          .attr('y', -NODE_R - 4)
+          .attr('text-anchor', 'middle')
+          .attr('font-size', 8)
+          .attr('font-weight', 500)
+          .attr('fill', '#e5e7eb')
+          .text(d => d.label || `Note ${d.id}`)
+          .style('pointer-events', 'none');
+
+        // Events (no transitions — cheaper)
+        g.on('click', (event, d) => {
+           event.stopPropagation();
+           onNodeClick(parseInt(d.id, 10));
+        })
+        .on('mouseenter', (event, d) => {
+           setHoveredNode(d);
+           d3.select(event.currentTarget).select('circle')
+             .attr('r', NODE_R + 3)
+             .attr('stroke-width', 2.5);
+        })
+        .on('mouseleave', (event, d) => {
+           setHoveredNode(null);
+           d3.select(event.currentTarget).select('circle')
+             .attr('r', NODE_R)
+             .attr('stroke-width', d.id === String(selectedNote) ? 3 : 1.5);
+        });
+
+        return g;
+      });
+
+    // --------- Force simulation (tuned) ----------
+    // link.distance/strength derived from weight (heavier => shorter/stronger)
+    const distance = d3.scaleLinear().domain([0, 1]).range([100, 60]);
+    const strength = d3.scaleLinear().domain([0, 1]).range([0.1, 1.0]);
+
+    const sim = d3.forceSimulation(nodesMemo)
+      .force('link', d3.forceLink(linksMemo)
+        .id(d => d.id)
+        .distance(d => distance(d.weight))
+        .strength(d => strength(d.weight))
+        .iterations(1)) // fewer iterations for speed
+      .force('charge', d3.forceManyBody()
+        .strength(-60)
+        .theta(0.9)
+        .distanceMax(Math.max(700, Math.min(MAX_CHARGE_DISTANCE, Math.max(width, height)))))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(COLLIDE_R).strength(0.1))
+      .force('x', d3.forceX(width / 2).strength(0.01))
+      .force('y', d3.forceY(height / 2).strength(0.01))
+      // decay so it settles sooner
+      .alpha(2.2)
+      .alphaDecay(1 - Math.pow(0.001, 1 / 300));
+
+    simulationRef.current = sim;
+
+    // Throttle DOM writes to ~60 fps
+    let lastRender = 0;
+    let rafScheduled = false;
+
+    const render = (now) => {
+      rafScheduled = false;
+      if (now - lastRender < TARGET_FPS_MS) return;
+      lastRender = now;
+
+      // Update link positions
+      linkSel
         .attr('x1', d => d.source.x)
         .attr('y1', d => d.source.y)
         .attr('x2', d => d.target.x)
         .attr('y2', d => d.target.y);
 
-      linkLabels
+      // Midpoints for labels
+      labelSel
         .attr('x', d => (d.source.x + d.target.x) / 2)
         .attr('y', d => (d.source.y + d.target.y) / 2);
 
-      node.attr('transform', d => `translate(${d.x},${d.y})`);
+      // Node transforms
+      nodeGSel.attr('transform', d => `translate(${d.x},${d.y})`);
+    };
+
+    sim.on('tick', () => {
+      if (!rafScheduled) {
+        rafScheduled = true;
+        requestAnimationFrame(render);
+      }
     });
 
-    function dragstarted(event, d) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
-      d.fx = d.x;
-      d.fy = d.y;
-    }
-
-    function dragged(event, d) {
-      d.fx = event.x;
-      d.fy = event.y;
-    }
-
-    function dragended(event, d) {
-      if (!event.active) simulation.alphaTarget(0);
-      if (!event.sourceEvent.shiftKey) {
-        d.fx = null;
-        d.fy = null;
+    // Pause simulation when tab is hidden (battery/perf)
+    const onVis = () => {
+      if (document.hidden) {
+        sim.stop();
+      } else if (isRunning) {
+        sim.alpha(0.3).restart();
       }
-    }
+    };
+    document.addEventListener('visibilitychange', onVis);
 
-    return () => simulation.stop();
-  }, [graphData, selectedNote, width, height, onNodeClick]);
+    // Cleanup
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      sim.stop();
+    };
+  }, [nodesMemo, linksMemo, width, height, onNodeClick, isRunning]);
 
+  // --------- Highlight selected node without full redraw ----------
+  useEffect(() => {
+    if (!svgRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.selectAll('g.node circle')
+      .attr('stroke', function () {
+        const d = d3.select(this.parentNode).datum();
+        return d && d.id === String(selectedNote) ? '#ffffff' : '#1f2937';
+      })
+      .attr('stroke-width', function () {
+        const d = d3.select(this.parentNode).datum();
+        const isSel = d && d.id === String(selectedNote);
+        return isSel ? 3 : 1.5;
+      })
+      .attr('r', function () {
+        const d = d3.select(this.parentNode).datum();
+        const isHover = false; // no persisted hover state on circles
+        return isHover ? NODE_R + 3 : NODE_R;
+      });
+  }, [selectedNote]);
+
+  // --------- Controls ----------
   const handleResetView = () => {
     const svg = d3.select(svgRef.current);
-    const zoom = d3.zoom().scaleExtent([0.1, 10]);
-    svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+    if (!zoomBehaviorRef.current) return;
+    svg.transition().duration(300).call(zoomBehaviorRef.current.transform, d3.zoomIdentity);
   };
 
   const handleToggleSimulation = () => {
-    if (simulationRef.current) {
-      if (isRunning) {
-        simulationRef.current.stop();
-      } else {
-        simulationRef.current.alpha(0.3).restart();
-      }
-      setIsRunning(!isRunning);
+    const sim = simulationRef.current;
+    if (!sim) return;
+    if (isRunning) {
+      sim.stop();
+    } else {
+      sim.alpha(0.3).restart();
     }
+    setIsRunning(!isRunning);
   };
 
   const handleOpenExport = () => {
@@ -237,6 +323,8 @@ export default function GraphVisualization({
         width={width}
         height={height}
         className="graph-svg"
+        // minimal CSS via classes; avoid expensive filters
+        style={{ background: 'transparent', display: 'block' }}
       />
 
       <GraphControlsPanel
@@ -247,17 +335,13 @@ export default function GraphVisualization({
         loading={loading}
         position={panelPosition}
       />
-      
+
       <div className="graph-controls">
-        <button onClick={handleResetView} className="control-btn" title="Reset View">
-          ⟲
-        </button>
+        <button onClick={handleResetView} className="control-btn" title="Reset View">⟲</button>
         <button onClick={handleToggleSimulation} className="control-btn" title="Toggle Physics">
           {isRunning ? '❚❚' : '▶'}
         </button>
-        <button onClick={handleOpenExport} className="control-btn" title="Export Graph">
-          ⤓
-        </button>
+        <button onClick={handleOpenExport} className="control-btn" title="Export Graph">⤓</button>
       </div>
 
       {hoveredNode && (

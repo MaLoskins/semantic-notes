@@ -143,9 +143,9 @@ export default function GraphControlsPanel({
               }}
               title="Choose PCA (fast, linear), UMAP/t-SNE (nonlinear, capture local structure), or None"
             >
+              <option value="tsne">t-SNE</option>
               <option value="pca">PCA</option>
               <option value="umap">UMAP</option>
-              <option value="tsne">t-SNE</option>
               <option value="none">None</option>
             </select>
           </div>
