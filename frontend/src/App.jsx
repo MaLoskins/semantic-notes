@@ -725,7 +725,7 @@ export default function App() {
           </div>
           {isAuthenticated && user && (
             <div className="user-section">
-              <span className="username">👤 {user.username}</span>
+              <span className="username"> {user.username}</span>
               <button
                 onClick={logout}
                 className="logout-button"

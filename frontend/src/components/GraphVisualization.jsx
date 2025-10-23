@@ -24,7 +24,6 @@ export default function GraphVisualization({
   const [hoveredNode, setHoveredNode] = useState(null);
   const [isRunning, setIsRunning] = useState(true);
 
-  // Export modal and notifications
   const [exportOpen, setExportOpen] = useState(false);
   const [exportTransform, setExportTransform] = useState({ x: 0, y: 0, k: 1 });
   const [toastOpen, setToastOpen] = useState(false);
@@ -47,25 +46,21 @@ export default function GraphVisualization({
     
     svg.call(zoom);
 
-    // Prepare data
-
     const nodeData = nodes.map(n => ({
-      ...n,                                // keep your original props (name/title/label/cluster/color)
+      ...n,
       id: String(n.id),
       x: typeof n.x === 'number' ? (n.x * width / 2 + width / 2) : Math.random() * width,
       y: typeof n.y === 'number' ? (n.y * height / 2 + height / 2) : Math.random() * height,
     }));
 
     const linkData = edges.map(e => ({
-      ...e,                                // keep link props (weight/type/etc.)
+      ...e,
       source: String(e.source),
       target: String(e.target),
     }));
 
-
     const weightScale = d3.scaleLinear().domain([0, 1]).range([0.1, 1]);
 
-    // Create simulation
     const simulation = d3.forceSimulation(nodeData)
       .force('link', d3.forceLink(linkData)
         .id(d => d.id)
@@ -79,7 +74,6 @@ export default function GraphVisualization({
 
     simulationRef.current = simulation;
 
-    // Gradients
     const defs = svg.append('defs');
     linkData.forEach((d, i) => {
       const gradient = defs.append('linearGradient')
@@ -100,7 +94,6 @@ export default function GraphVisualization({
         .attr('stop-opacity', 0.2);
     });
 
-    // Links
     const link = g.append('g')
       .selectAll('line')
       .data(linkData)
@@ -109,7 +102,6 @@ export default function GraphVisualization({
       .attr('stroke-width', d => Math.max(1, (d.weight || 0.5) * 4))
       .style('pointer-events', 'none');
 
-    // Link labels
     const linkLabels = g.append('g')
       .selectAll('text')
       .data(linkData.filter(d => d.weight > 0.5))
@@ -120,7 +112,6 @@ export default function GraphVisualization({
       .style('text-anchor', 'middle')
       .style('pointer-events', 'none');
 
-    // Nodes
     const node = g.append('g')
       .selectAll('g')
       .data(nodeData)
@@ -245,10 +236,7 @@ export default function GraphVisualization({
         ref={svgRef}
         width={width}
         height={height}
-        style={{
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          borderRadius: '8px'
-        }}
+        className="graph-svg"
       />
 
       <GraphControlsPanel

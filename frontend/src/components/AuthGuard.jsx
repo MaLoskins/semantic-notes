@@ -6,12 +6,8 @@ export default function AuthGuard({ children }) {
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
-      }}>
+      <div className="loading">
+        <div className="loading-spinner" />
         <div>Loading...</div>
       </div>
     );

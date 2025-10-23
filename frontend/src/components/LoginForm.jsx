@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import './LoginForm.css';
 
 export default function LoginForm() {
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
+  const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
@@ -48,26 +47,9 @@ export default function LoginForm() {
   };
 
   return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: '100vh',
-      backgroundColor: '#f8f8f8',
-    }}>
-      <form onSubmit={handleSubmit} style={{
-        background: '#fff',
-        padding: '2rem',
-        borderRadius: '8px',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
-        maxWidth: '400px',
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          {mode === 'login' ? 'Login' : 'Register'}
-        </h2>
+    <div className="login-container">
+      <form onSubmit={handleSubmit} className="login-form">
+        <h2>{mode === 'login' ? 'Login' : 'Register'}</h2>
 
         <label>Username</label>
         <input
@@ -75,7 +57,6 @@ export default function LoginForm() {
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           required
-          style={{ marginBottom: '1rem', padding: '0.5rem' }}
         />
 
         {mode === 'register' && (
@@ -85,7 +66,6 @@ export default function LoginForm() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              style={{ marginBottom: '1rem', padding: '0.5rem' }}
             />
           </>
         )}
@@ -96,51 +76,30 @@ export default function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          style={{ marginBottom: '1rem', padding: '0.5rem' }}
         />
 
         {error && (
-          <div style={{ color: 'red', marginBottom: '1rem', textAlign: 'center' }}>
+          <div className="login-error">
             {error}
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: '0.75rem',
-            backgroundColor: '#007bff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: loading ? 'not-allowed' : 'pointer',
-            fontSize: '1rem'
-          }}
-        >
+        <button type="submit" disabled={loading}>
           {loading ? 'Processing...' : mode === 'login' ? 'Login' : 'Register'}
         </button>
 
-        <p style={{ textAlign: 'center', marginTop: '1rem' }}>
+        <p className="login-footer">
           {mode === 'login' ? (
             <>
               Don't have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('register')}
-                style={{ color: '#007bff', border: 'none', background: 'none', cursor: 'pointer' }}
-              >
+              <button type="button" onClick={() => setMode('register')}>
                 Register
               </button>
             </>
           ) : (
             <>
               Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setMode('login')}
-                style={{ color: '#007bff', border: 'none', background: 'none', cursor: 'pointer' }}
-              >
+              <button type="button" onClick={() => setMode('login')}>
                 Login
               </button>
             </>
