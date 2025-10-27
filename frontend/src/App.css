@@ -903,7 +903,7 @@ body {
   border: 1px solid var(--border);
   padding: 1rem;
   border-radius: var(--radius-lg);
-  max-width: 35%;
+  max-width: 33%;
   max-height: 800px;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);

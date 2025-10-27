@@ -14,6 +14,16 @@ const LABEL_ZOOM_THRESHOLD = 0.8;   // show link labels only when zoomed in
 const MAX_CHARGE_DISTANCE = 700;    // cap n-body computations
 const TARGET_FPS_MS = 16;           // ~60fps
 
+// Core Physics Parameters
+const INTRA_CLUSTER_LINK_DISTANCE_BASE = 40;   // base distance for links within same cluster
+const INTER_CLUSTER_LINK_DISTANCE_BASE = 250;  // base distance for links between clusters
+const BASE_CHARGE_STRENGTH = -35;              // base repulsion force for nodes
+const CHARGE_PER_DEGREE = -10;                 // additional repulsion per connected edge
+const CLUSTER_ANCHOR_STRENGTH = 0.05;          // how strongly nodes are pulled to cluster center
+const RESTART_ALPHA = 0.1;                     // simulation "temperature" on restart/drag/visibility
+const LINK_LABEL_WEIGHT_THRESHOLD = 0.4;       // minimum edge weight to show label
+const ALPHA_DECAY_TICKS = 200;                 // number of ticks for simulation to cool down
+
 export default function GraphVisualization({
   graphData,
   onNodeClick,
@@ -142,7 +152,7 @@ export default function GraphVisualization({
 
     // Only attach labels for heavier links; hide until zoomed in
     const labelSel = gLinkLabels.selectAll('text')
-      .data(linksMemo.filter(d => d.weight > 0.6))
+      .data(linksMemo.filter(d => d.weight > LINK_LABEL_WEIGHT_THRESHOLD))
       .join('text')
       .attr('class', 'link-label')
       .text(d => d.weight.toFixed(2))
@@ -153,7 +163,7 @@ export default function GraphVisualization({
 
     const drag = d3.drag()
       .on('start', (event, d) => {
-        if (!event.active && simulationRef.current) simulationRef.current.alphaTarget(0.3).restart();
+        if (!event.active && simulationRef.current) simulationRef.current.alphaTarget(RESTART_ALPHA).restart();
         d.fx = d.x;
         d.fy = d.y;
       })
@@ -230,7 +240,7 @@ export default function GraphVisualization({
       const cA = getCluster(d.source);
       const cB = getCluster(d.target);
       const intra = cA !== undefined && cA === cB;
-      const base = intra ? 55 : 120;           // tighter within cluster, looser across clusters
+      const base = intra ? INTRA_CLUSTER_LINK_DISTANCE_BASE : INTER_CLUSTER_LINK_DISTANCE_BASE;
       const byWeight = intra ? 35 : 20;        // weight shortens more if intra
       return Math.max(20, base - byWeight * d.weight);
     };
@@ -248,8 +258,8 @@ export default function GraphVisualization({
     const chargeStrength = (node) => {
       const deg = degreeById.get(node.id) || 0;
       // More connected nodes repel a bit more to prevent hairballs
-      const base = -35;
-      const perDeg = -10; // each extra neighbor adds repulsion
+      const base = BASE_CHARGE_STRENGTH;
+      const perDeg = CHARGE_PER_DEGREE; // each extra neighbor adds repulsion
       // clamp to avoid blowing apart the layout
       return Math.max(-260, base + perDeg * deg);
     };
@@ -264,12 +274,12 @@ export default function GraphVisualization({
     const clusterX = d3.forceX(n => {
       if (n.cluster === undefined) return width / 2;
       return clusterAnchors.get(n.cluster)?.x ?? width / 2;
-    }).strength(0.05);
+    }).strength(CLUSTER_ANCHOR_STRENGTH);
 
     const clusterY = d3.forceY(n => {
       if (n.cluster === undefined) return height / 2;
       return clusterAnchors.get(n.cluster)?.y ?? height / 2;
-    }).strength(0.05);
+    }).strength(CLUSTER_ANCHOR_STRENGTH);
 
     // Mild global centering to avoid drift
     const center = d3.forceCenter(width / 2, height / 2);
@@ -294,7 +304,7 @@ export default function GraphVisualization({
       // realistic alpha settings
       .alpha(0.9)
       .alphaMin(0.001)
-      .alphaDecay(1 - Math.pow(0.001, 1 / 600)); // ~400 ticks to cool
+      .alphaDecay(1 - Math.pow(0.001, 1 / ALPHA_DECAY_TICKS));
 
     simulationRef.current = sim;
 
@@ -335,7 +345,7 @@ export default function GraphVisualization({
       if (document.hidden) {
         sim.stop();
       } else if (isRunning) {
-        sim.alpha(0.3).restart();
+        sim.alpha(RESTART_ALPHA).restart();
       }
     };
     document.addEventListener('visibilitychange', onVis);
@@ -381,7 +391,7 @@ export default function GraphVisualization({
     if (isRunning) {
       sim.stop();
     } else {
-      sim.alpha(0.3).restart();
+      sim.alpha(RESTART_ALPHA).restart();
     }
     setIsRunning(!isRunning);
   };
