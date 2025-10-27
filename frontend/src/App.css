@@ -596,7 +596,7 @@ body {
 
 .note-item-title {
   color: var(--text-primary);
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -612,7 +612,7 @@ body {
 
 .note-preview {
   color: var(--text-muted);
-  font-size: 0.8125rem;
+  font-size: 1rem;
   line-height: 1.5;
   margin-bottom: 0.5rem;
   overflow: hidden;
@@ -1813,3 +1813,56 @@ body {
     width: calc(100% - 2rem);
   }
 }
+
+
+/* Compact markdown snippet styles for list/trash items */
+.markdown-snippet--compact .markdown-preview {
+  font-size: 0.5rem;          /* smaller body text */
+  line-height: 1.0;           /* tighter lines for density */
+}
+
+.markdown-snippet--compact .markdown-preview p,
+.markdown-snippet--compact .markdown-preview ul,
+.markdown-snippet--compact .markdown-preview ol,
+.markdown-snippet--compact .markdown-preview pre,
+.markdown-snippet--compact .markdown-preview blockquote {
+  margin: 0.25rem 0;           /* less vertical spacing */
+}
+
+.markdown-snippet--compact .markdown-preview h1 { font-size: 0.75rem; margin: 0.25rem 0; }
+.markdown-snippet--compact .markdown-preview h2 { font-size: 0.72em; margin: 0.25rem 0; }
+.markdown-snippet--compact .markdown-preview h3 { font-size: 0.7rem; margin: 0.2rem 0; }
+.markdown-snippet--compact .markdown-preview h4,
+.markdown-snippet--compact .markdown-preview h5,
+.markdown-snippet--compact .markdown-preview h6 {
+  font-size: 0.9rem; margin: 0.15rem 0;
+}
+
+.markdown-snippet--compact .markdown-preview code.inline-code {
+  font-size: 0.78rem;          /* inline code smaller */
+  padding: 0.05rem 0.25rem;
+}
+
+.markdown-snippet--compact .markdown-preview pre.code-block {
+  font-size: 0.65rem;          /* fenced code smaller */
+  padding: 0.35rem 0.5rem;
+  margin: 0.25rem 0;
+  overflow: hidden;            /* respect outer max-height clipping */
+  border-radius: 6px;
+}
+
+/* Optional: tighten lists a touch */
+.markdown-snippet--compact .markdown-preview li { margin: 0.15rem 0; }
+
+/* Optional: faint end fade for clipped content (works if parent is not opaque) */
+.markdown-snippet--compact {
+  position: relative;
+}
+.markdown-snippet--compact::after {
+  content: "";
+  position: absolute;
+  height: 28px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0,0,0,0), var(--bg-primary, rgba(0,0,0,0.08)));
+}
+

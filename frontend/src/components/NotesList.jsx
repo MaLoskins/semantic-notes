@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import MarkdownPreview from './MarkdownPreview';
 
 const PREVIEW_LENGTH = 120;
 
@@ -144,61 +145,64 @@ export default function NotesList({
     onDelete(index);
   };
 
-  return (
-    <div className="notes-list">
-      <div className="list-header">
-        <h3>Notes ({processedNotes.length})</h3>
-        
-        <div className="list-controls">
-          <select 
-            value={sortBy} 
-            onChange={(e) => setSortBy(e.target.value)}
+return (
+  <div className="notes-list">
+    <div className="list-header">
+      <h3>Notes ({processedNotes.length})</h3>
+
+      <div className="list-controls">
+        <select 
+          value={sortBy} 
+          onChange={(e) => setSortBy(e.target.value)}
+          className="form-select"
+        >
+          <option value="updated">Recent</option>
+          <option value="created">Created</option>
+          <option value="title">Title</option>
+        </select>
+
+        {allTags.length > 0 && (
+          <select
+            value={filterTag}
+            onChange={(e) => setFilterTag(e.target.value)}
             className="form-select"
           >
-            <option value="updated">Recent</option>
-            <option value="created">Created</option>
-            <option value="title">Title</option>
+            <option value="">All Tags</option>
+            {allTags.map(tag => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
           </select>
-
-          {allTags.length > 0 && (
-            <select
-              value={filterTag}
-              onChange={(e) => setFilterTag(e.target.value)}
-              className="form-select"
-            >
-              <option value="">All Tags</option>
-              {allTags.map(tag => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
-          )}
-        </div>
+        )}
       </div>
+    </div>
 
-      {processedNotes.length === 0 ? (
-        <div className="empty-message">
-          {searchMode === 'semantic' ? (
-            <>
-              <div className="empty-message-title">No semantic matches</div>
-              <div className="empty-message-hint">
-                {semanticError ? semanticError : 'Try lowering the similarity threshold or refining your query'}
-              </div>
-            </>
-          ) : notes.length === 0 ? (
-            <>
-              <div className="empty-message-title">No notes yet</div>
-              <div className="empty-message-hint">Create your first note to get started</div>
-            </>
-          ) : (
-            <>
-              <div className="empty-message-title">No matches</div>
-              <div className="empty-message-hint">Try different search terms or filters</div>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="notes-items">
-          {processedNotes.map((note) => (
+    {processedNotes.length === 0 ? (
+      <div className="empty-message">
+        {searchMode === 'semantic' ? (
+          <>
+            <div className="empty-message-title">No semantic matches</div>
+            <div className="empty-message-hint">
+              {semanticError ? semanticError : 'Try lowering the similarity threshold or refining your query'}
+            </div>
+          </>
+        ) : notes.length === 0 ? (
+          <>
+            <div className="empty-message-title">No notes yet</div>
+            <div className="empty-message-hint">Create your first note to get started</div>
+          </>
+        ) : (
+          <>
+            <div className="empty-message-title">No matches</div>
+            <div className="empty-message-hint">Try different search terms or filters</div>
+          </>
+        )}
+      </div>
+    ) : (
+      <div className="notes-items">
+        {processedNotes.map((note) => {
+          const full = String(note.content || '');
+          const snippet = full.slice(0, PREVIEW_LENGTH); // safe char-slice (fast)
+          return (
             <div
               key={note.originalIndex}
               className={`note-item ${selectedNote === note.originalIndex ? 'selected' : ''}`}
@@ -214,18 +218,24 @@ export default function NotesList({
                     {formatRelativeTime(note.updatedAt || note.createdAt)}
                   </span>
                 </div>
-                
                 {searchMode === 'semantic' ? (
-                  <div className="why-match">
-                    {bestWhySnippet(note.content, searchTerm)}
+                  <div
+                    className="why-match markdown-snippet markdown-snippet--compact"
+                    style={{ maxHeight: 140, overflow: 'hidden' }}
+                  >
+                    <MarkdownPreview content={bestWhySnippet(full, searchTerm)} />
                   </div>
                 ) : (
-                  <p className="note-preview">
-                    {note.content.substring(0, PREVIEW_LENGTH)}
-                    {note.content.length > PREVIEW_LENGTH && '...'}
-                  </p>
+                  <div
+                    className="note-preview markdown-snippet markdown-snippet--compact"
+                    style={{ maxHeight: 140, overflow: 'hidden' }}
+                  >
+                    <MarkdownPreview content={snippet} />
+                    {full.length > PREVIEW_LENGTH && <span className="truncate-ellipsis">…</span>}
+                  </div>
                 )}
-                
+
+
                 {note.tags && (
                   <div className="note-tags">
                     {note.tags.split(',').map((tag, i) => (
@@ -236,7 +246,7 @@ export default function NotesList({
                   </div>
                 )}
               </div>
-              
+
               <div className="note-item-actions">
                 <button
                   onClick={(e) => {
@@ -267,9 +277,10 @@ export default function NotesList({
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+          );
+        })}
+      </div>
+    )}
+  </div>
+);
 }

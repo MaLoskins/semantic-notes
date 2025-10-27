@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import ConfirmDialog from './ConfirmDialog';
+import MarkdownPreview from './MarkdownPreview';
 
 const PREVIEW_LENGTH = 120;
 
@@ -36,40 +37,48 @@ export default function TrashView({
     );
   }, [trashedNotes]);
 
-  return (
-    <div className="trash-view">
-      <div className="list-header">
-        <h3>Trash ({items.length})</h3>
-        <div className="list-controls">
-          <button
-            className="btn btn-danger"
-            disabled={items.length === 0}
-            onClick={() => setConfirmEmpty(true)}
-            title="Permanently delete all trashed notes"
-          >
-            Empty Trash
-          </button>
-        </div>
+return (
+  <div className="trash-view">
+    <div className="list-header">
+      <h3>Trash ({items.length})</h3>
+      <div className="list-controls">
+        <button
+          className="btn btn-danger"
+          disabled={items.length === 0}
+          onClick={() => setConfirmEmpty(true)}
+          title="Permanently delete all trashed notes"
+        >
+          Empty Trash
+        </button>
       </div>
+    </div>
 
-      {items.length === 0 ? (
-        <div className="empty-message">
-          <div className="empty-message-title">Trash is empty</div>
-          <div className="empty-message-hint">Deleted notes will appear here</div>
-        </div>
-      ) : (
-        <div className="trash-items">
-          {items.map(note => (
+    {items.length === 0 ? (
+      <div className="empty-message">
+        <div className="empty-message-title">Trash is empty</div>
+        <div className="empty-message-hint">Deleted notes will appear here</div>
+      </div>
+    ) : (
+      <div className="trash-items">
+        {items.map(note => {
+          const full = String(note.content || '');
+          const snippet = full.slice(0, PREVIEW_LENGTH);
+          return (
             <div key={note.id} className="trash-item">
               <div className="trash-item-content">
                 <div className="trash-item-header">
                   <h4 className="note-item-title">{note.title}</h4>
                   <span className="note-date">Deleted {formatRelativeTime(note.deletedAt)}</span>
                 </div>
-                <p className="note-preview">
-                  {note.content.substring(0, PREVIEW_LENGTH)}
-                  {note.content.length > PREVIEW_LENGTH && '...'}
-                </p>
+                <div
+                  className="note-preview markdown-snippet markdown-snippet--compact"
+                  style={{ maxHeight: 140, overflow: 'hidden' }}
+                >
+                  <MarkdownPreview content={snippet} />
+                  {full.length > PREVIEW_LENGTH && <span className="truncate-ellipsis">…</span>}
+                </div>
+
+
                 {note.tags && (
                   <div className="note-tags">
                     {note.tags.split(',').map((tag, i) => (
@@ -96,39 +105,40 @@ export default function TrashView({
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
+    )}
 
-      <ConfirmDialog
-        isOpen={confirmId !== null}
-        title="Delete Forever?"
-        message="This will permanently delete the note from trash. This action cannot be undone."
-        confirmLabel="Delete Forever"
-        cancelLabel="Cancel"
-        danger
-        onConfirm={() => {
-          if (confirmId != null && onDeleteForever) {
-            onDeleteForever(confirmId);
-          }
-          setConfirmId(null);
-        }}
-        onCancel={() => setConfirmId(null)}
-      />
+    <ConfirmDialog
+      isOpen={confirmId !== null}
+      title="Delete Forever?"
+      message="This will permanently delete the note from trash. This action cannot be undone."
+      confirmLabel="Delete Forever"
+      cancelLabel="Cancel"
+      danger
+      onConfirm={() => {
+        if (confirmId != null && onDeleteForever) {
+          onDeleteForever(confirmId);
+        }
+        setConfirmId(null);
+      }}
+      onCancel={() => setConfirmId(null)}
+    />
 
-      <ConfirmDialog
-        isOpen={confirmEmpty}
-        title="Empty Trash?"
-        message="All notes in the trash will be permanently deleted. This action cannot be undone."
-        confirmLabel="Empty Trash"
-        cancelLabel="Cancel"
-        danger
-        onConfirm={() => {
-          if (onEmptyTrash) onEmptyTrash();
-          setConfirmEmpty(false);
-        }}
-        onCancel={() => setConfirmEmpty(false)}
-      />
-    </div>
-  );
+    <ConfirmDialog
+      isOpen={confirmEmpty}
+      title="Empty Trash?"
+      message="All notes in the trash will be permanently deleted. This action cannot be undone."
+      confirmLabel="Empty Trash"
+      cancelLabel="Cancel"
+      danger
+      onConfirm={() => {
+        if (onEmptyTrash) onEmptyTrash();
+        setConfirmEmpty(false);
+      }}
+      onCancel={() => setConfirmEmpty(false)}
+    />
+  </div>
+);
 }

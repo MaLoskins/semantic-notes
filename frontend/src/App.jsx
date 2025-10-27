@@ -13,6 +13,9 @@ import TrashView from './components/TrashView';
 import UnsavedChangesDialog from './components/UnsavedChangesDialog';
 import SimilarNotesModal from './components/SimilarNotesModal';
 import ImportLocalNotesModal from './components/ImportLocalNotesModal';
+import MarkdownPreview from './components/MarkdownPreview';
+
+
 const GRAPH_UPDATE_DEBOUNCE = 500;
 const SEMANTIC_QUERY_DEBOUNCE = 500;
 const MIN_SEM_QUERY_LEN = 3;
@@ -860,23 +863,30 @@ export default function App() {
             </div>
           )}
 
-          {selectedNote !== null && notes[selectedNote] && (
-            <div className="selected-note-preview fade-in">
-              <h3>{notes[selectedNote].title}</h3>
-              <p>{notes[selectedNote].content}</p>
-              {notes[selectedNote].tags && (
-                <div className="note-tags" style={{ marginTop: '0.5rem' }}>
-                  {notes[selectedNote].tags.split(',').map((tag, i) => (
-                    <span key={i} className="tag">
-                      {tag.trim()}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            {selectedNote !== null && notes[selectedNote] && (
+              <div className="selected-note-preview fade-in">
+                <h3>{notes[selectedNote].title}</h3>
+
+                {/* RENDER MARKDOWN IN PREVIEW PANE — CHANGED */}
+                <MarkdownPreview
+                  content={notes[selectedNote].content || ''}
+                  className="markdown-preview-only"
+                  style={{ maxHeight: '40vh', overflow: 'auto', marginTop: '0.5rem' }}
+                />
+
+                {notes[selectedNote].tags && (
+                  <div className="note-tags" style={{ marginTop: '0.5rem' }}>
+                    {notes[selectedNote].tags.split(',').map((tag, i) => (
+                      <span key={i} className="tag">
+                        {tag.trim()}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
  
       <SimilarNotesModal
         isOpen={similarOpen}

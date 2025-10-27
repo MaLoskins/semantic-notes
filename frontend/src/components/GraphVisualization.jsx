@@ -9,10 +9,10 @@ const COLORS = ['#e6194b','#3cb44b','#ffe119','#0082c8','#f58231','#911eb4','#46
 
 // Tunables
 const NODE_R = 12;
-const COLLIDE_R = 18;
-const LABEL_ZOOM_THRESHOLD = 0.8;  // show link labels only when zoomed in
-const MAX_CHARGE_DISTANCE = 600;   // cap n-body computations
-const TARGET_FPS_MS = 16;          // ~60fps
+const COLLIDE_BASE = 16;            // base collide radius (topped up by degree)
+const LABEL_ZOOM_THRESHOLD = 0.8;   // show link labels only when zoomed in
+const MAX_CHARGE_DISTANCE = 700;    // cap n-body computations
+const TARGET_FPS_MS = 16;           // ~60fps
 
 export default function GraphVisualization({
   graphData,
@@ -45,7 +45,7 @@ export default function GraphVisualization({
   const [toastMessage, setToastMessage] = useState('');
 
   // --------- Data prep (memoized) ----------
-  const { nodesMemo, linksMemo } = useMemo(() => {
+  const { nodesMemo, linksMemo, degreeById, nodeById, clusterAnchors } = useMemo(() => {
     const nodes = (graphData?.nodes || []).map(n => ({
       ...n,
       id: String(n.id),
@@ -58,10 +58,37 @@ export default function GraphVisualization({
       ...e,
       source: String(e.source),
       target: String(e.target),
-      weight: typeof e.weight === 'number' ? e.weight : 0.5
+      weight: typeof e.weight === 'number' ? Math.max(0, Math.min(1, e.weight)) : 0.5
     }));
 
-    return { nodesMemo: nodes, linksMemo: edges };
+    // degree map
+    const degree = new Map();
+    edges.forEach(e => {
+      degree.set(e.source, (degree.get(e.source) || 0) + 1);
+      degree.set(e.target, (degree.get(e.target) || 0) + 1);
+    });
+
+    const byId = new Map(nodes.map(n => [n.id, n]));
+
+    // cluster anchors: spread cluster centroids on a circle
+    const clusters = Array.from(new Set(nodes.map(n => n.cluster).filter(v => v !== undefined)));
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = Math.min(width, height) * 0.28; // ring radius for cluster anchors
+    const anchors = new Map();
+    const TWO_PI = Math.PI * 2;
+    clusters.forEach((cl, i) => {
+      const angle = (i / clusters.length) * TWO_PI;
+      anchors.set(cl, { x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle) });
+    });
+
+    return {
+      nodesMemo: nodes,
+      linksMemo: edges,
+      degreeById: degree,
+      nodeById: byId,
+      clusterAnchors: anchors
+    };
   }, [graphData, width, height]);
 
   // --------- Build / (re)build scene ----------
@@ -88,7 +115,7 @@ export default function GraphVisualization({
 
     // Zoom (persist between updates)
     const zoom = d3.zoom()
-      .scaleExtent([0.1, 10])
+      .scaleExtent([0.15, 6])
       .on('zoom', (event) => {
         gRoot.attr('transform', event.transform);
         // toggle link-label visibility at zoom threshold to reduce DOM cost
@@ -98,11 +125,11 @@ export default function GraphVisualization({
     zoomBehaviorRef.current = zoom;
     svg.call(zoom);
 
-    // Scales (constant functions are cheaper than re-styling on every tick)
-    const widthScale = d3.scaleLinear().domain([0, 1]).range([1, 4]);
-    const alphaScale = d3.scaleLinear().domain([0, 1]).range([0.25, 0.9]);
+    // Scales for link appearance
+    const widthScale = d3.scaleLinear().domain([0, 1]).range([1, 3.5]);
+    const alphaScale = d3.scaleLinear().domain([0, 1]).range([0.2, 0.85]);
 
-    // Selections (stable across ticks)
+    // Selections
     const linkSel = gLinks.selectAll('line')
       .data(linksMemo)
       .join('line')
@@ -115,7 +142,7 @@ export default function GraphVisualization({
 
     // Only attach labels for heavier links; hide until zoomed in
     const labelSel = gLinkLabels.selectAll('text')
-      .data(linksMemo.filter(d => d.weight > 0.4))
+      .data(linksMemo.filter(d => d.weight > 0.6))
       .join('text')
       .attr('class', 'link-label')
       .text(d => d.weight.toFixed(2))
@@ -157,7 +184,6 @@ export default function GraphVisualization({
           .attr('stroke', d => d.id === String(selectedNote) ? '#ffffff' : '#1f2937')
           .attr('stroke-width', d => d.id === String(selectedNote) ? 3 : 1.5);
 
-        // Very small labels to keep DOM light; text is expensive
         g.append('text')
           .attr('y', -NODE_R - 4)
           .attr('text-anchor', 'middle')
@@ -167,7 +193,7 @@ export default function GraphVisualization({
           .text(d => d.label || `Note ${d.id}`)
           .style('pointer-events', 'none');
 
-        // Events (no transitions — cheaper)
+        // Events
         g.on('click', (event, d) => {
            event.stopPropagation();
            onNodeClick(parseInt(d.id, 10));
@@ -188,28 +214,87 @@ export default function GraphVisualization({
         return g;
       });
 
-    // --------- Force simulation (tuned) ----------
-    // link.distance/strength derived from weight (heavier => shorter/stronger)
-    const distance = d3.scaleLinear().domain([0, 1]).range([100, 60]);
-    const strength = d3.scaleLinear().domain([0, 1]).range([0.1, 1.0]);
+    // --------- Force simulation (retuned) ----------
+    const diag = Math.hypot(width, height);
+    const chargeDistanceMax = Math.min(MAX_CHARGE_DISTANCE, diag * 0.9);
+
+    // helpers that work before/after d3 mutates link endpoints into node objects
+    const getCluster = (endpoint) => {
+      if (endpoint && typeof endpoint === 'object') return endpoint.cluster;
+      const id = String(endpoint);
+      return nodeById.get(id)?.cluster;
+    };
+
+    // Cluster-aware link distance & strength
+    const linkDistance = (d) => {
+      const cA = getCluster(d.source);
+      const cB = getCluster(d.target);
+      const intra = cA !== undefined && cA === cB;
+      const base = intra ? 55 : 120;           // tighter within cluster, looser across clusters
+      const byWeight = intra ? 35 : 20;        // weight shortens more if intra
+      return Math.max(20, base - byWeight * d.weight);
+    };
+
+    const linkStrength = (d) => {
+      const cA = getCluster(d.source);
+      const cB = getCluster(d.target);
+      const intra = cA !== undefined && cA === cB;
+      // stronger inside clusters, softer across
+      const s = intra ? 0.6 + 0.4 * d.weight : 0.08 + 0.22 * d.weight;
+      return Math.max(0.01, Math.min(1, s));
+    };
+
+    // Degree-aware repulsion and collision
+    const chargeStrength = (node) => {
+      const deg = degreeById.get(node.id) || 0;
+      // More connected nodes repel a bit more to prevent hairballs
+      const base = -35;
+      const perDeg = -10; // each extra neighbor adds repulsion
+      // clamp to avoid blowing apart the layout
+      return Math.max(-260, base + perDeg * deg);
+    };
+
+    const collideRadius = (node) => {
+      const deg = degreeById.get(node.id) || 0;
+      // bigger collide radius for hubs
+      return COLLIDE_BASE + Math.min(12, Math.sqrt(deg) * 2);
+    };
+
+    // Light cluster anchoring (keeps communities loosely coherent)
+    const clusterX = d3.forceX(n => {
+      if (n.cluster === undefined) return width / 2;
+      return clusterAnchors.get(n.cluster)?.x ?? width / 2;
+    }).strength(0.05);
+
+    const clusterY = d3.forceY(n => {
+      if (n.cluster === undefined) return height / 2;
+      return clusterAnchors.get(n.cluster)?.y ?? height / 2;
+    }).strength(0.05);
+
+    // Mild global centering to avoid drift
+    const center = d3.forceCenter(width / 2, height / 2);
 
     const sim = d3.forceSimulation(nodesMemo)
       .force('link', d3.forceLink(linksMemo)
         .id(d => d.id)
-        .distance(d => distance(d.weight))
-        .strength(d => strength(d.weight))
-        .iterations(1)) // fewer iterations for speed
+        .distance(linkDistance)
+        .strength(linkStrength)
+        .iterations(2))
       .force('charge', d3.forceManyBody()
-        .strength(-60)
+        .strength(chargeStrength)
         .theta(0.9)
-        .distanceMax(Math.max(700, Math.min(MAX_CHARGE_DISTANCE, Math.max(width, height)))))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(COLLIDE_R).strength(0.1))
-      .force('x', d3.forceX(width / 2).strength(0.01))
-      .force('y', d3.forceY(height / 2).strength(0.01))
-      // decay so it settles sooner
-      .alpha(2.2)
-      .alphaDecay(1 - Math.pow(0.001, 1 / 300));
+        .distanceMax(chargeDistanceMax))
+      .force('collision', d3.forceCollide().radius(collideRadius).strength(0.7))
+      .force('clusterX', clusterX)
+      .force('clusterY', clusterY)
+      .force('center', center)
+      // gentle positional bias back to canvas (keeps things inside without hard walls)
+      .force('x', d3.forceX(width / 2).strength(0.02))
+      .force('y', d3.forceY(height / 2).strength(0.02))
+      // realistic alpha settings
+      .alpha(0.9)
+      .alphaMin(0.001)
+      .alphaDecay(1 - Math.pow(0.001, 1 / 600)); // ~400 ticks to cool
 
     simulationRef.current = sim;
 
@@ -260,7 +345,7 @@ export default function GraphVisualization({
       document.removeEventListener('visibilitychange', onVis);
       sim.stop();
     };
-  }, [nodesMemo, linksMemo, width, height, onNodeClick, isRunning]);
+  }, [nodesMemo, linksMemo, width, height, onNodeClick, isRunning, degreeById, nodeById, clusterAnchors]);
 
   // --------- Highlight selected node without full redraw ----------
   useEffect(() => {
@@ -323,7 +408,6 @@ export default function GraphVisualization({
         width={width}
         height={height}
         className="graph-svg"
-        // minimal CSS via classes; avoid expensive filters
         style={{ background: 'transparent', display: 'block' }}
       />
 
