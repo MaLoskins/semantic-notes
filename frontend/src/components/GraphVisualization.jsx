@@ -9,7 +9,7 @@ const COLORS = ['#e6194b','#3cb44b','#ffe119','#0082c8','#f58231','#911eb4','#46
 
 // Tunables
 const NODE_R = 12;
-const COLLIDE_BASE = 16;            // base collide radius (topped up by degree)
+const COLLIDE_BASE = 20;            // base collide radius (topped up by degree)
 const LABEL_ZOOM_THRESHOLD = 0.8;   // show link labels only when zoomed in
 const MAX_CHARGE_DISTANCE = 700;    // cap n-body computations
 const TARGET_FPS_MS = 16;           // ~60fps
@@ -19,7 +19,7 @@ const INTRA_CLUSTER_LINK_DISTANCE_BASE = 40;   // base distance for links within
 const INTER_CLUSTER_LINK_DISTANCE_BASE = 250;  // base distance for links between clusters
 const BASE_CHARGE_STRENGTH = -35;              // base repulsion force for nodes
 const CHARGE_PER_DEGREE = -10;                 // additional repulsion per connected edge
-const CLUSTER_ANCHOR_STRENGTH = 0.05;          // how strongly nodes are pulled to cluster center
+const CLUSTER_ANCHOR_STRENGTH = 0.15;          // how strongly nodes are pulled to cluster center
 const RESTART_ALPHA = 0.1;                     // simulation "temperature" on restart/drag/visibility
 const LINK_LABEL_WEIGHT_THRESHOLD = 0.4;       // minimum edge weight to show label
 const ALPHA_DECAY_TICKS = 200;                 // number of ticks for simulation to cool down
