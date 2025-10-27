@@ -4,7 +4,31 @@
    ================================================================= */
 
 /* =================================================================
-   CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   TABLE OF CONTENTS
+   -----------------------------------------------------------------
+   1. CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   2. BASE & RESET
+   3. LAYOUT SYSTEM
+   4. COMPONENTS
+      4.1  Header
+      4.2  Navigation (Tabs, Search)
+      4.3  Forms & Controls
+      4.4  Buttons
+      4.5  Notes (Editor, List, Trash)
+      4.6  Graph (Visualization, Controls Panel)
+      4.7  Modals & Dialogs
+      4.8  Notifications (Toast, Banners)
+      4.9  Markdown Preview
+      4.10 Authentication
+      4.11 Miscellaneous
+   5. UTILITIES
+      5.1  Scrollbar
+      5.2  Animations
+   6. RESPONSIVE DESIGN
+   ================================================================= */
+
+/* =================================================================
+   1. CSS CUSTOM PROPERTIES (DESIGN TOKENS)
    ================================================================= */
 :root {
   /* Color Palette - Background */
@@ -45,7 +69,7 @@
 }
 
 /* =================================================================
-   BASE & RESET
+   2. BASE & RESET
    ================================================================= */
 * {
   margin: 0;
@@ -63,22 +87,26 @@ body {
 }
 
 /* =================================================================
-   LAYOUT - APP STRUCTURE
+   3. LAYOUT SYSTEM
    ================================================================= */
+
+/* App Container */
 .app {
   display: flex;
   flex-direction: column;
   height: 100vh;
 }
 
+/* Main Content Area */
 .main-content {
   display: flex;
   flex: 1;
   overflow: hidden;
 }
 
+/* Sidebar */
 .sidebar {
-  width: 380px;
+  width: 25%;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border);
   display: flex;
@@ -87,8 +115,12 @@ body {
 }
 
 /* =================================================================
-   COMPONENTS - HEADER
+   4. COMPONENTS
    ================================================================= */
+
+/* -----------------------------------------------------------------
+   4.1 HEADER
+   ----------------------------------------------------------------- */
 .app-header {
   background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
   padding: 1rem 2rem;
@@ -113,9 +145,47 @@ body {
   align-items: center;
 }
 
-/* =================================================================
-   COMPONENTS - SEARCH
-   ================================================================= */
+/* -----------------------------------------------------------------
+   4.2 NAVIGATION (TABS, SEARCH)
+   ----------------------------------------------------------------- */
+
+/* Tabs */
+.sidebar-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.tab-btn {
+  padding: 0.375rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.tab-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.tab-btn.active {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+/* Search Bar */
 .search-bar {
   position: relative;
 }
@@ -178,9 +248,7 @@ body {
   border-radius: var(--radius-sm);
 }
 
-/* =================================================================
-   COMPONENTS - CONNECTION STATUS
-   ================================================================= */
+/* Connection Status */
 .connection-status {
   display: flex;
   align-items: center;
@@ -205,125 +273,102 @@ body {
   background: var(--accent-danger);
 }
 
-/* =================================================================
-   COMPONENTS - BUTTONS
-   ================================================================= */
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius-md);
+/* -----------------------------------------------------------------
+   4.3 FORMS & CONTROLS
+   ----------------------------------------------------------------- */
+
+/* Form Groups */
+.form-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
   font-size: 0.875rem;
   font-weight: 500;
+  color: var(--text-muted);
+}
+
+/* Form Inputs */
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  transition: var(--transition);
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--text-dim);
+}
+
+.form-textarea {
+  min-height: 300px;
+  resize: vertical;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  line-height: 1.3;
+}
+
+/* Form Select */
+.form-select {
+  padding: 0.375rem 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
   cursor: pointer;
   transition: var(--transition);
+}
+
+.form-select:hover {
+  background: var(--bg-tertiary);
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+/* Character Count */
+.char-count {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+/* Threshold Control */
+.threshold-control {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  white-space: nowrap;
 }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--accent-primary);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-primary-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-danger {
-  background: var(--accent-danger);
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  background: var(--accent-danger-hover);
-}
-
-.btn-icon {
-  padding: 0.5rem;
-  min-width: 2rem;
-}
-
-.btn-sm {
-  padding: 0.25rem 0.5rem;
+.threshold-label {
   font-size: 0.75rem;
-}
-
-.logout-button {
-  background: transparent;
-  border: 1px solid var(--accent-primary);
   color: var(--text-dim);
-  padding: 0.375rem 0.75rem;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-size: 0.875rem;
-  transition: var(--transition);
-  margin: 10px;
 }
 
-.logout-button:hover {
-  background: var(--accent-primary-hover);
-  color: var(--text-secondary);
+.threshold-slider {
+  width: 140px;
+  accent-color: var(--accent-primary);
 }
 
-/* =================================================================
-   COMPONENTS - TABS
-   ================================================================= */
-.sidebar-tabs {
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.tab-btn {
-  padding: 0.375rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.tab-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.tab-btn.active {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
-}
-
-/* =================================================================
-   COMPONENTS - TOGGLE SWITCH
-   ================================================================= */
+/* Toggle Switch */
 .toggle-switch {
   display: inline-flex;
   border: 1px solid var(--border);
@@ -355,98 +400,117 @@ body {
   box-shadow: var(--shadow-sm);
 }
 
-/* =================================================================
-   COMPONENTS - FORM CONTROLS
-   ================================================================= */
-.form-group {
-  position: relative;
+/* Radio Group */
+.radio-group {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
-.form-label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.form-input,
-.form-textarea {
-  width: 100%;
-  padding: 0.75rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: 0.875rem;
-  transition: var(--transition);
-}
-
-.form-input:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-input::placeholder,
-.form-textarea::placeholder {
-  color: var(--text-dim);
-}
-
-.form-textarea {
-  min-height: 300px;
-  resize: vertical;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  line-height: 1.6;
-}
-
-.form-select {
-  padding: 0.375rem 0.75rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.form-select:hover {
-  background: var(--bg-tertiary);
-}
-
-.form-select:focus {
-  outline: none;
-  border-color: var(--border-focus);
-}
-
-.char-count {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  text-align: right;
-}
-
-.threshold-control {
+.radio {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.375rem;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
 }
 
-.threshold-label {
-  font-size: 0.75rem;
-  color: var(--text-dim);
-}
-
-.threshold-slider {
-  width: 140px;
+.radio input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
   accent-color: var(--accent-primary);
 }
 
-/* =================================================================
-   COMPONENTS - NOTE EDITOR
-   ================================================================= */
+/* -----------------------------------------------------------------
+   4.4 BUTTONS
+   ----------------------------------------------------------------- */
+
+/* Base Button */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Button Variants */
+.btn-primary {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.btn-danger {
+  background: var(--accent-danger);
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--accent-danger-hover);
+}
+
+/* Button Modifiers */
+.btn-icon {
+  padding: 0.5rem;
+  min-width: 2rem;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Logout Button */
+.logout-button {
+  background: transparent;
+  border: 1px solid var(--accent-primary);
+  color: var(--text-dim);
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: var(--transition);
+  margin: 10px;
+}
+
+.logout-button:hover {
+  background: var(--accent-primary-hover);
+  color: var(--text-secondary);
+}
+
+/* -----------------------------------------------------------------
+   4.5 NOTES (EDITOR, LIST, TRASH)
+   ----------------------------------------------------------------- */
+
+/* ---- Note Editor ---- */
 .note-editor {
   padding: 1.5rem;
   height: 100%;
@@ -520,9 +584,7 @@ body {
   gap: 0.5rem;
 }
 
-/* =================================================================
-   COMPONENTS - NOTES LIST
-   ================================================================= */
+/* ---- Notes List ---- */
 .notes-list {
   padding: 1.5rem;
   height: 100%;
@@ -618,7 +680,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
 
@@ -693,9 +755,13 @@ body {
   margin-bottom: 0.5rem;
 }
 
-/* =================================================================
-   COMPONENTS - TRASH VIEW
-   ================================================================= */
+/* Truncate Ellipsis */
+.truncate-ellipsis {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+/* ---- Trash View ---- */
 .trash-view {
   padding: 1.5rem;
   height: 100%;
@@ -745,9 +811,11 @@ body {
   opacity: 1;
 }
 
-/* =================================================================
-   COMPONENTS - GRAPH VISUALIZATION
-   ================================================================= */
+/* -----------------------------------------------------------------
+   4.6 GRAPH (VISUALIZATION, CONTROLS PANEL)
+   ----------------------------------------------------------------- */
+
+/* ---- Graph Container ---- */
 .graph-container {
   flex: 1;
   background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
@@ -766,6 +834,7 @@ body {
   border-radius: var(--radius-lg);
 }
 
+/* Graph Controls */
 .graph-controls {
   position: absolute;
   top: 1rem;
@@ -797,6 +866,7 @@ body {
   transform: scale(1.05);
 }
 
+/* Node Tooltip */
 .node-tooltip {
   position: absolute;
   top: 1rem;
@@ -824,6 +894,7 @@ body {
   color: var(--text-muted);
 }
 
+/* Selected Note Preview */
 .selected-note-preview {
   position: absolute;
   bottom: 1rem;
@@ -832,7 +903,7 @@ body {
   border: 1px solid var(--border);
   padding: 1rem;
   border-radius: var(--radius-lg);
-  max-width: 350px;
+  max-width: 35%;
   max-height: 800px;
   overflow-y: auto;
   box-shadow: var(--shadow-lg);
@@ -852,9 +923,7 @@ body {
   line-height: 1.6;
 }
 
-/* =================================================================
-   COMPONENTS - GRAPH CONTROLS PANEL
-   ================================================================= */
+/* ---- Graph Controls Panel ---- */
 .graph-controls-panel {
   position: absolute;
   left: 1rem;
@@ -1008,9 +1077,65 @@ body {
   margin-top: 0.25rem;
 }
 
-/* =================================================================
-   COMPONENTS - SIMILAR NOTES MODAL
-   ================================================================= */
+/* -----------------------------------------------------------------
+   4.7 MODALS & DIALOGS
+   ----------------------------------------------------------------- */
+
+/* Modal Overlay */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Modal */
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: min(520px, 92vw);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  color: var(--text-primary);
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 1rem 1.25rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.modal-list {
+  margin: 0.5rem 0 0 1rem;
+  color: var(--text-muted);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Similar Notes Modal */
 .similar-list {
   display: flex;
   flex-direction: column;
@@ -1096,64 +1221,11 @@ body {
   align-items: center;
 }
 
-/* =================================================================
-   COMPONENTS - MODAL
-   ================================================================= */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  -webkit-backdrop-filter: blur(2px);
-  backdrop-filter: blur(2px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-  animation: fadeIn 0.2s ease-out;
-}
+/* -----------------------------------------------------------------
+   4.8 NOTIFICATIONS (TOAST, BANNERS)
+   ----------------------------------------------------------------- */
 
-.modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  width: min(520px, 92vw);
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-
-.modal-header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h3 {
-  color: var(--text-primary);
-  font-size: 1.0625rem;
-  font-weight: 600;
-}
-
-.modal-body {
-  padding: 1rem 1.25rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.modal-list {
-  margin: 0.5rem 0 0 1rem;
-  color: var(--text-muted);
-}
-
-.modal-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-  padding: 0.75rem 1.25rem;
-  border-top: 1px solid var(--border);
-}
-
-/* =================================================================
-   COMPONENTS - TOAST NOTIFICATION
-   ================================================================= */
+/* Toast Notification */
 .toast-container {
   position: fixed;
   top: 1rem;
@@ -1207,9 +1279,7 @@ body {
   color: var(--text-secondary);
 }
 
-/* =================================================================
-   COMPONENTS - BANNERS
-   ================================================================= */
+/* Banners */
 .error-banner {
   background: rgba(239, 68, 68, 0.1);
   border-bottom: 1px solid var(--accent-danger);
@@ -1232,78 +1302,19 @@ body {
   gap: 0.5rem;
 }
 
-/* =================================================================
-   COMPONENTS - STATS BAR
-   ================================================================= */
-.stats-bar {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
+/* -----------------------------------------------------------------
+   4.9 MARKDOWN PREVIEW
+   ----------------------------------------------------------------- */
 
-/* =================================================================
-   COMPONENTS - EMPTY & LOADING STATES
-   ================================================================= */
-.empty-message {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--text-dim);
-}
-
-.empty-message-title {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
-}
-
-.empty-message-hint {
-  font-size: 0.875rem;
-  color: var(--text-dim);
-}
-
-.empty-state-hint {
-  margin-top: 1rem;
-  font-size: 0.875rem;
-}
-
-.loading,
-.empty-state {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
-  color: var(--text-dim);
-  padding: 2rem;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin: 0 auto 1rem;
-}
-
-/* =================================================================
-   COMPONENTS - MARKDOWN PREVIEW
-   ================================================================= */
+/* Base Markdown Preview */
 .markdown-preview,
 .markdown-pane,
 .markdown-preview-only {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
+  background: var(--bg-secondary);
   border-radius: var(--radius-md);
   padding: 1rem;
   color: var(--text-secondary);
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   line-height: 1.7;
 }
 
@@ -1311,6 +1322,7 @@ body {
   min-height: 300px;
 }
 
+/* Markdown Headings */
 .markdown-preview h1,
 .markdown-pane h1 {
   font-size: 1.625rem;
@@ -1354,6 +1366,7 @@ body {
   margin: 0.5rem 0;
 }
 
+/* Markdown Text */
 .markdown-preview p,
 .markdown-pane p {
   margin: 0.5rem 0 0.75rem;
@@ -1369,6 +1382,7 @@ body {
   color: var(--text-secondary);
 }
 
+/* Markdown Lists */
 .markdown-preview ul,
 .markdown-pane ul,
 .markdown-preview ol,
@@ -1381,16 +1395,18 @@ body {
   margin: 0.25rem 0;
 }
 
+/* Markdown Blockquote */
 .markdown-preview blockquote,
 .markdown-pane blockquote {
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.75rem;
+  margin: 0.4rem 0;
+  padding: 0.2rem 0.5rem;
   border-left: 3px solid var(--accent-primary);
   background: rgba(59, 130, 246, 0.08);
   color: var(--text-muted);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 
+/* Markdown Code */
 .inline-code,
 .markdown-preview :not(pre) > code,
 .markdown-pane :not(pre) > code {
@@ -1424,6 +1440,7 @@ body {
   line-height: 1.6;
 }
 
+/* Markdown Links */
 .markdown-preview a,
 .markdown-pane a {
   color: var(--accent-primary);
@@ -1436,6 +1453,7 @@ body {
   text-decoration: underline;
 }
 
+/* Markdown Tables */
 .markdown-preview table,
 .markdown-pane table {
   width: 100%;
@@ -1466,6 +1484,7 @@ body {
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* Markdown Images */
 .markdown-preview img,
 .markdown-pane img {
   max-width: 100%;
@@ -1475,6 +1494,7 @@ body {
   border: 1px solid var(--border);
 }
 
+/* Markdown Horizontal Rule */
 .markdown-preview hr,
 .markdown-pane hr {
   border: none;
@@ -1482,43 +1502,68 @@ body {
   margin: 1rem 0;
 }
 
+/* Syntax Highlighting */
 .markdown-preview .hljs,
 .markdown-pane .hljs {
   color: var(--text-secondary);
   background: transparent;
 }
 
-/* =================================================================
-   COMPONENTS - SPLIT VIEW
-   ================================================================= */
-.split-container {
-  display: flex;
-  gap: 0.75rem;
-  height: 40vh;
-  min-height: 300px;
+/* Markdown Snippet Styles */
+.markdown-snippet {
+  position: relative;
 }
 
-.split-pane {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
+/* Compact Markdown Snippets (for lists/trash) */
+.markdown-snippet--compact .markdown-preview {
+  font-size: 0.5rem;
+  line-height: 1.0;
 }
 
-.split-pane-editor .form-textarea {
-  height: 100%;
-  min-height: 0;
-  resize: none;
+.markdown-snippet--compact .markdown-preview p,
+.markdown-snippet--compact .markdown-preview ul,
+.markdown-snippet--compact .markdown-preview ol,
+.markdown-snippet--compact .markdown-preview pre,
+.markdown-snippet--compact .markdown-preview blockquote {
+  margin: 0.25rem 0;
 }
 
-.split-pane-preview .markdown-pane {
-  height: 100%;
-  overflow: auto;
+.markdown-snippet--compact .markdown-preview h1 { font-size: 0.75rem; margin: 0.25rem 0; }
+.markdown-snippet--compact .markdown-preview h2 { font-size: 0.72em; margin: 0.25rem 0; }
+.markdown-snippet--compact .markdown-preview h3 { font-size: 0.7rem; margin: 0.2rem 0; }
+.markdown-snippet--compact .markdown-preview h4,
+.markdown-snippet--compact .markdown-preview h5,
+.markdown-snippet--compact .markdown-preview h6 { font-size: 0.9rem; margin: 0.15rem 0; }
+
+.markdown-snippet--compact .markdown-preview code.inline-code {
+  font-size: 0.65rem;
+  padding: 0.05rem 0.25rem;
 }
 
-/* =================================================================
-   COMPONENTS - LOGIN FORM
-   ================================================================= */
+.markdown-snippet--compact .markdown-preview pre.code-block {
+  font-size: 0.65rem;
+  padding: 0.35rem 0.5rem;
+  margin: 0.25rem 0;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.markdown-snippet--compact .markdown-preview li { margin: 0.15rem 0; }
+
+.markdown-snippet--compact::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 80%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0,0,0,0), var(--bg-primary, rgba(0,0,0,0.08)));
+}
+
+/* -----------------------------------------------------------------
+   4.10 AUTHENTICATION
+   ----------------------------------------------------------------- */
+
+/* Login Container */
 .login-container {
   display: flex;
   align-items: center;
@@ -1527,6 +1572,7 @@ body {
   background: var(--bg-primary);
 }
 
+/* Login Form */
 .login-form {
   background: var(--bg-secondary);
   padding: 2rem;
@@ -1627,9 +1673,93 @@ body {
   text-decoration: underline;
 }
 
-/* =================================================================
-   COMPONENTS - IMPORT LOCAL NOTES MODAL
-   ================================================================= */
+/* -----------------------------------------------------------------
+   4.11 MISCELLANEOUS COMPONENTS
+   ----------------------------------------------------------------- */
+
+/* Stats Bar */
+.stats-bar {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Empty & Loading States */
+.empty-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-dim);
+}
+
+.empty-message-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.empty-message-hint {
+  font-size: 0.875rem;
+  color: var(--text-dim);
+}
+
+.empty-state-hint {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+}
+
+.loading,
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--text-dim);
+  padding: 2rem;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+/* Split View */
+.split-container {
+  display: flex;
+  gap: 0.75rem;
+  height: 40vh;
+  min-height: 300px;
+}
+
+.split-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-pane-editor .form-textarea {
+  height: 100%;
+  min-height: 0;
+  resize: none;
+}
+
+.split-pane-preview .markdown-pane {
+  height: 100%;
+  overflow: auto;
+}
+
+/* Import Local Notes Modal */
 .modal-content {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -1714,8 +1844,12 @@ body {
 }
 
 /* =================================================================
-   UTILITIES - SCROLLBAR
+   5. UTILITIES
    ================================================================= */
+
+/* -----------------------------------------------------------------
+   5.1 SCROLLBAR
+   ----------------------------------------------------------------- */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -1734,9 +1868,9 @@ body {
   background: var(--bg-hover);
 }
 
-/* =================================================================
-   UTILITIES - ANIMATIONS
-   ================================================================= */
+/* -----------------------------------------------------------------
+   5.2 ANIMATIONS
+   ----------------------------------------------------------------- */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -1759,8 +1893,10 @@ body {
 }
 
 /* =================================================================
-   RESPONSIVE - MEDIA QUERIES
+   6. RESPONSIVE DESIGN
    ================================================================= */
+
+/* Medium Screens */
 @media (max-width: 900px) {
   .split-container {
     flex-direction: column;
@@ -1780,6 +1916,7 @@ body {
   }
 }
 
+/* Small Screens */
 @media (max-width: 768px) {
   .sidebar {
     width: 100%;
@@ -1808,61 +1945,9 @@ body {
   }
 }
 
+/* Extra Small Screens */
 @media (max-width: 600px) {
   .graph-controls-panel {
     width: calc(100% - 2rem);
   }
 }
-
-
-/* Compact markdown snippet styles for list/trash items */
-.markdown-snippet--compact .markdown-preview {
-  font-size: 0.5rem;          /* smaller body text */
-  line-height: 1.0;           /* tighter lines for density */
-}
-
-.markdown-snippet--compact .markdown-preview p,
-.markdown-snippet--compact .markdown-preview ul,
-.markdown-snippet--compact .markdown-preview ol,
-.markdown-snippet--compact .markdown-preview pre,
-.markdown-snippet--compact .markdown-preview blockquote {
-  margin: 0.25rem 0;           /* less vertical spacing */
-}
-
-.markdown-snippet--compact .markdown-preview h1 { font-size: 0.75rem; margin: 0.25rem 0; }
-.markdown-snippet--compact .markdown-preview h2 { font-size: 0.72em; margin: 0.25rem 0; }
-.markdown-snippet--compact .markdown-preview h3 { font-size: 0.7rem; margin: 0.2rem 0; }
-.markdown-snippet--compact .markdown-preview h4,
-.markdown-snippet--compact .markdown-preview h5,
-.markdown-snippet--compact .markdown-preview h6 {
-  font-size: 0.9rem; margin: 0.15rem 0;
-}
-
-.markdown-snippet--compact .markdown-preview code.inline-code {
-  font-size: 0.78rem;          /* inline code smaller */
-  padding: 0.05rem 0.25rem;
-}
-
-.markdown-snippet--compact .markdown-preview pre.code-block {
-  font-size: 0.65rem;          /* fenced code smaller */
-  padding: 0.35rem 0.5rem;
-  margin: 0.25rem 0;
-  overflow: hidden;            /* respect outer max-height clipping */
-  border-radius: 6px;
-}
-
-/* Optional: tighten lists a touch */
-.markdown-snippet--compact .markdown-preview li { margin: 0.15rem 0; }
-
-/* Optional: faint end fade for clipped content (works if parent is not opaque) */
-.markdown-snippet--compact {
-  position: relative;
-}
-.markdown-snippet--compact::after {
-  content: "";
-  position: absolute;
-  height: 28px;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(0,0,0,0), var(--bg-primary, rgba(0,0,0,0.08)));
-}
-

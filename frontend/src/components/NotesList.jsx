@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import MarkdownPreview from './MarkdownPreview';
 
-const PREVIEW_LENGTH = 120;
+const PREVIEW_LENGTH = 250;
 
 function formatRelativeTime(dateString) {
   if (!dateString) return '';

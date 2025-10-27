@@ -224,7 +224,7 @@ export default forwardRef(function NoteEditor({ note, onSave, onCancel, onDirtyC
               ref={previewRef}
               content={content}
               className="form-input markdown-preview-only"
-              style={{ minHeight: 300, overflow: 'auto' }}
+              style={{ minHeight: 140, overflow: 'auto' }}
               onScroll={handlePreviewScroll}
             />
           )}
