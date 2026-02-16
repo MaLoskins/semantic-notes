@@ -4,3 +4,4 @@ __pycache__
 postgres-data
 .venv
 frontend/package-lock.json
+package-lock.json
