@@ -1,0 +1,16 @@
+/* =================================================================
+   SEMANTIC NOTES - STYLE BARREL
+   Imports all stylesheets in correct order
+   ================================================================= */
+
+@import './variables.css';
+@import './base.css';
+@import './layout.css';
+@import './components/header.css';
+@import './components/notes.css';
+@import './components/graph.css';
+@import './components/modals.css';
+@import './components/auth.css';
+@import './components/markdown.css';
+@import './components/toast.css';
+@import './components/trash.css';

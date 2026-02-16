@@ -1,0 +1,86 @@
+{
+  "notes": [
+    {
+      "title": "Daily standup — 2026-02-16",
+      "content": "## Today\n- Fix import edge-cases\n- Add search debounce\n\n## Blockers\n- None\n\n## Notes\nRemember to validate datetime parsing for `createdAt`/`updatedAt`.\n",
+      "tags": "work,planning,dev",
+      "createdAt": "2026-02-15T23:10:00Z",
+      "updatedAt": "2026-02-16T00:05:00Z"
+    },
+    {
+      "title": "Recipe: One-pan lemon garlic pasta",
+      "content": "Ingredients:\n- spaghetti\n- garlic\n- lemon\n- parmesan\n\nSteps:\n1. Simmer sauce.\n2. Cook pasta *in* sauce.\n3. Finish with cheese.\n\n> Tip: Reserve a splash of starchy water.\n",
+      "tags": "personal,cooking,food",
+      "createdAt": "2026-01-28T12:40:00Z",
+      "updatedAt": "2026-01-28T12:55:00Z"
+    },
+    {
+      "title": "Ideas: Graph UI improvements",
+      "content": "- Node clustering by tag\n- Edge weighting by semantic similarity\n- Export graph to SVG + JSON\n\n**Question:** show similarity threshold in the UI as a badge?\n",
+      "tags": "ux,graph,ideas",
+      "createdAt": "2026-02-10T04:12:30Z",
+      "updatedAt": "2026-02-12T08:01:00Z"
+    },
+    {
+      "title": "Study notes — Temporal GNN reading",
+      "content": "Key points:\n- Temporal message passing vs static graph embeddings\n- Time encoding choices (sinusoidal, learnable)\n- Evaluation leakage risks\n\nTODO: write a small ablation plan.\n",
+      "tags": "research,gnn,ml",
+      "createdAt": "2026-02-01T09:00:00Z",
+      "updatedAt": "2026-02-01T10:15:00Z"
+    },
+    {
+      "title": "Personal finance — budget categories v2",
+      "content": "Proposed categories:\n- Needs (rent, groceries)\n- Wants (eating out, hobbies)\n- Savings (investing, emergency)\n\nEdge cases:\n- Transfers between accounts\n- Refunds and chargebacks\n",
+      "tags": "finance,budgeting",
+      "createdAt": "2026-01-15T02:00:00Z",
+      "updatedAt": "2026-02-05T06:30:00Z"
+    },
+    {
+      "title": "Markdown test suite",
+      "content": "# Heading 1\n## Heading 2\n\nInline code: `const x = 1;`\n\nCode block:\n```python\ndef hello():\n    return \"world\"\n```\n\nTable:\n| A | B |\n|---|---|\n| 1 | 2 |\n\n- [ ] unchecked\n- [x] checked\n",
+      "tags": "test,markdown",
+      "createdAt": "2026-02-16T00:30:00Z",
+      "updatedAt": "2026-02-16T00:35:00Z"
+    },
+    {
+      "title": "Books to read",
+      "content": "1) The Pragmatic Programmer\n2) Designing Data-Intensive Applications\n3) Gödel, Escher, Bach\n\nWhy: improve systems thinking + craft.\n",
+      "tags": "reading,list",
+      "createdAt": "2025-12-20T11:00:00Z",
+      "updatedAt": "2026-01-03T03:20:00Z"
+    },
+    {
+      "title": "Random scratchpad",
+      "content": "• Investigate why some notes appear duplicated in similarity modal.\n• Consider adding `tags` normalization (lowercase, trim spaces).\n• Add a migration path for embeddings on import (future).\n",
+      "tags": "",
+      "createdAt": "2026-02-14T07:45:00Z",
+      "updatedAt": "2026-02-14T07:46:30Z"
+    }
+  ],
+  "trash": [
+    {
+      "title": "Old meeting notes (obsolete)",
+      "content": "This was superseded by the new project plan.\n\nAction items are no longer relevant.",
+      "tags": "work,archive",
+      "createdAt": "2025-11-01T01:00:00Z",
+      "updatedAt": "2025-11-01T01:10:00Z",
+      "deletedAt": "2026-02-10T05:00:00Z"
+    },
+    {
+      "title": "Draft: half-baked feature idea",
+      "content": "Maybe add per-note access control? Probably overkill for single-user.\n",
+      "tags": "draft,ideas",
+      "createdAt": "2026-02-08T13:20:00Z",
+      "updatedAt": "2026-02-08T13:21:00Z",
+      "deletedAt": "2026-02-09T00:00:00Z"
+    },
+    {
+      "title": "Temporary debug log",
+      "content": "DEBUG:\n- Repro steps\n- Console output\n\n(Delete after issue resolved.)",
+      "tags": "debug,temp",
+      "createdAt": "2026-02-12T02:10:00Z",
+      "updatedAt": "2026-02-12T02:12:00Z",
+      "deleted_at": "2026-02-12T03:00:00Z"
+    }
+  ]
+}

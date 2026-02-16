@@ -175,7 +175,6 @@ export function useNotes() {
         tags: noteData.tags || ''
       });
       setNotes(prev => [dbNote, ...prev]);
-      saveAllToStorage([dbNote, ...notes], trashedNotes);
       return dbNote;
     } catch (err) {
       console.error('Failed to create note:', err);
@@ -207,17 +206,12 @@ export function useNotes() {
       });
       const newList = notes.map((n, i) => (i === index ? updatedNote : n));
       setNotes(newList);
-      saveAllToStorage(newList, trashedNotes);
     } catch (err) {
       console.error('Failed to update note:', err);
       setError('Failed to update note');
       throw err;
     }
   }, [isAuthenticated, notes, trashedNotes]);
-
-  const deleteNote = useCallback((index) => {
-    setNotes(prev => prev.filter((_, i) => i !== index));
-  }, []);
 
   // Trash management
   const moveToTrash = useCallback(async (index) => {
@@ -242,7 +236,6 @@ export function useNotes() {
       const trashedNote = { ...note, is_deleted: true, deleted_at: new Date().toISOString() };
       setNotes(prev => prev.filter((_, i) => i !== index));
       setTrashedNotes(prev => [trashedNote, ...prev]);
-      saveAllToStorage(notes.filter((_, i) => i !== index), [trashedNote, ...trashedNotes]);
       return trashedNote;
     } catch (err) {
       console.error('Failed to move to trash:', err);
@@ -283,7 +276,6 @@ export function useNotes() {
       const updatedTrash = trashedNotes.filter(n => n.id !== id);
       setTrashedNotes(updatedTrash);
       setNotes(prev => [restoredNote, ...prev]);
-      saveAllToStorage([restoredNote, ...notes], updatedTrash);
     } catch (err) {
       console.error('Failed to restore note:', err);
       setError('Failed to restore note');
@@ -308,7 +300,6 @@ export function useNotes() {
       await dbApi.permanentDelete(id);
       const updatedTrash = trashedNotes.filter(n => n.id !== id);
       setTrashedNotes(updatedTrash);
-      saveAllToStorage(notes, updatedTrash);
     } catch (err) {
       console.error('Failed to permanently delete note:', err);
       setError('Failed to permanently delete note');
@@ -325,7 +316,6 @@ export function useNotes() {
     try {
       await dbApi.emptyTrash();
       setTrashedNotes([]);
-      saveAllToStorage(notes, []);
     } catch (err) {
       console.error('Failed to empty trash:', err);
       setError('Failed to empty trash');
@@ -349,7 +339,6 @@ export function useNotes() {
 
       // Update state and local storage
       setNotes(updatedNotes);
-      saveAllToStorage(updatedNotes, trashedNotes);
 
       return { success: true, imported: importedNotes.length };
     } catch (err) {
@@ -359,16 +348,6 @@ export function useNotes() {
     }
   }, [trashedNotes]);
   
-  const searchNotes = useCallback((term) => {
-    if (!term) return notes;
-    const lower = term.toLowerCase();
-    return notes.filter(note => 
-      note.title.toLowerCase().includes(lower) ||
-      note.content.toLowerCase().includes(lower) ||
-      (note.tags && note.tags.toLowerCase().includes(lower))
-    );
-  }, [notes]);
-
   const getAllTags = useCallback(() => {
     const tagSet = new Set();
     notes.forEach(note => {
@@ -428,12 +407,10 @@ export function useNotes() {
     error,
     addNote,
     updateNote,
-    deleteNote,
     moveToTrash,
     restoreFromTrash,
     permanentDelete,
     emptyTrash,
-    searchNotes,
     getAllTags,
     exportNotes,
     importNotes,

@@ -1,0 +1,256 @@
+/* =================================================================
+   MARKDOWN PREVIEW
+   ================================================================= */
+
+/* Base Markdown Preview */
+.markdown-preview,
+.markdown-pane,
+.markdown-preview-only {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+
+.markdown-preview-only {
+  min-height: 300px;
+}
+
+/* Markdown Headings */
+.markdown-preview h1,
+.markdown-pane h1 {
+  font-size: 1.625rem;
+  color: var(--text-primary);
+  margin: 0.5rem 0 0.75rem;
+}
+
+.markdown-preview h2,
+.markdown-pane h2 {
+  font-size: 1.375rem;
+  color: var(--text-primary);
+  margin: 0.5rem 0 0.75rem;
+}
+
+.markdown-preview h3,
+.markdown-pane h3 {
+  font-size: 1.125rem;
+  color: var(--text-primary);
+  margin: 0.5rem 0 0.75rem;
+}
+
+.markdown-preview h4,
+.markdown-pane h4 {
+  font-size: 1rem;
+  color: var(--text-primary);
+  margin: 0.75rem 0 0.5rem;
+}
+
+.markdown-preview h5,
+.markdown-pane h5 {
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  margin: 0.5rem 0;
+}
+
+.markdown-preview h6,
+.markdown-pane h6 {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin: 0.5rem 0;
+}
+
+/* Markdown Text */
+.markdown-preview p,
+.markdown-pane p {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.markdown-preview strong,
+.markdown-pane strong {
+  color: var(--text-primary);
+}
+
+.markdown-preview em,
+.markdown-pane em {
+  color: var(--text-secondary);
+}
+
+/* Markdown Lists */
+.markdown-preview ul,
+.markdown-pane ul,
+.markdown-preview ol,
+.markdown-pane ol {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+}
+
+.markdown-preview li,
+.markdown-pane li {
+  margin: 0.25rem 0;
+}
+
+/* Markdown Blockquote */
+.markdown-preview blockquote,
+.markdown-pane blockquote {
+  margin: 0.4rem 0;
+  padding: 0.2rem 0.5rem;
+  border-left: 3px solid var(--accent-primary);
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--text-muted);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+/* Markdown Code */
+.inline-code,
+.markdown-preview :not(pre) > code,
+.markdown-pane :not(pre) > code {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.85em;
+}
+
+.markdown-preview pre,
+.markdown-pane pre {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  overflow: auto;
+  box-shadow: var(--shadow-sm);
+}
+
+.markdown-preview pre code,
+.markdown-pane pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-secondary);
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Markdown Links */
+.markdown-preview a,
+.markdown-pane a {
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
+.markdown-preview a:hover,
+.markdown-pane a:hover {
+  color: var(--accent-primary-hover);
+  text-decoration: underline;
+}
+
+/* Markdown Tables */
+.markdown-preview table,
+.markdown-pane table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5rem 0 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.markdown-preview th,
+.markdown-pane th,
+.markdown-preview td,
+.markdown-pane td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.markdown-preview th,
+.markdown-pane th {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.markdown-preview tr:nth-child(even) td,
+.markdown-pane tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Markdown Images */
+.markdown-preview img,
+.markdown-pane img {
+  max-width: 100%;
+  display: block;
+  margin: 0.5rem 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+/* Markdown Horizontal Rule */
+.markdown-preview hr,
+.markdown-pane hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1rem 0;
+}
+
+/* Syntax Highlighting */
+.markdown-preview .hljs,
+.markdown-pane .hljs {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+/* Markdown Snippet Styles */
+.markdown-snippet {
+  position: relative;
+}
+
+/* Compact Markdown Snippets (for lists/trash) */
+.markdown-snippet--compact .markdown-preview {
+  font-size: 0.5rem;
+  line-height: 1.0;
+}
+
+.markdown-snippet--compact .markdown-preview p,
+.markdown-snippet--compact .markdown-preview ul,
+.markdown-snippet--compact .markdown-preview ol,
+.markdown-snippet--compact .markdown-preview pre,
+.markdown-snippet--compact .markdown-preview blockquote {
+  margin: 0.25rem 0;
+}
+
+.markdown-snippet--compact .markdown-preview h1 { font-size: 0.75rem; margin: 0.25rem 0; }
+.markdown-snippet--compact .markdown-preview h2 { font-size: 0.72rem; margin: 0.25rem 0; }
+.markdown-snippet--compact .markdown-preview h3 { font-size: 0.7rem; margin: 0.2rem 0; }
+.markdown-snippet--compact .markdown-preview h4{ font-size: 0.68rem; margin: 0.2rem 0; }
+.markdown-snippet--compact .markdown-preview h5{ font-size: 0.65rem; margin: 0.2rem 0; }
+.markdown-snippet--compact .markdown-preview h6 { font-size: 0.63rem; margin: 0.15rem 0; }
+
+.markdown-snippet--compact .markdown-preview code.inline-code {
+  font-size: 0.65rem;
+  padding: 0.05rem 0.25rem;
+}
+
+.markdown-snippet--compact .markdown-preview pre.code-block {
+  font-size: 0.65rem;
+  padding: 0.35rem 0.5rem;
+  margin: 0.25rem 0;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.markdown-snippet--compact .markdown-preview li { margin: 0.15rem 0; }
+
+.markdown-snippet--compact::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 80%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0,0,0,0), var(--bg-primary, rgba(0,0,0,0.08)));
+}

@@ -16,12 +16,13 @@ _warnings.filterwarnings(
 )
 # ------------------------------------------------------------------------------
 
-import os
 import hashlib
 from typing import List, Optional, Dict, Any
 import numpy as np
 from cachetools import LRUCache
 from threading import Lock
+
+from config import settings
 
 # We import lazily to keep import time fast if a different backend is used
 _SentenceTransformer = None  # type: ignore
@@ -63,12 +64,13 @@ class EmbeddingService:
         normalize: bool = True,
     ) -> None:
         self.backend = backend
-        self.model_name = model_name or os.getenv("EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-        self.device = device or os.getenv("EMBEDDING_DEVICE", "cpu")
-        self.batch_size = int(os.getenv("EMBEDDING_BATCH_SIZE", str(batch_size)))
-        self.normalize = bool(os.getenv("EMBEDDING_NORMALIZE", str(normalize)).lower() in ("1", "true", "yes"))
-        self._cache = LRUCache(maxsize=int(os.getenv("EMBEDDING_CACHE_SIZE", str(cache_size))))
+        self.model_name = model_name or settings.EMBEDDING_MODEL_NAME
+        self.device = device or settings.EMBEDDING_DEVICE
+        self.batch_size = batch_size if model_name else settings.EMBEDDING_BATCH_SIZE
+        self.normalize = normalize if model_name else settings.EMBEDDING_NORMALIZE
+        self._cache = LRUCache(maxsize=cache_size if model_name else settings.EMBEDDING_CACHE_SIZE)
         self._model = None
+        self._model_lock = Lock()
 
     def info(self) -> Dict[str, Any]:
         return {
@@ -86,18 +88,24 @@ class EmbeddingService:
         if self._model is not None:
             return self._model
 
-        if self.backend == "sentence-transformers":
-            ST = _lazy_import_sentence_transformers()
-            self._model = ST(self.model_name, device=self.device)  # downloads on first use if needed
-            return self._model
+        with self._model_lock:
+            if self._model is not None:
+                return self._model
 
-        elif self.backend == "openai":
-            OpenAIClient = _lazy_import_openai_client()
-            self._model = OpenAIClient()
-            return self._model
+            if self.backend == "sentence-transformers":
+                ST = _lazy_import_sentence_transformers()
+                model = ST(self.model_name, device=self.device)  # downloads on first use if needed
+                self._model = model
+                return self._model
 
-        else:
-            raise ValueError(f"Unsupported backend: {self.backend}")
+            elif self.backend == "openai":
+                OpenAIClient = _lazy_import_openai_client()
+                model = OpenAIClient()
+                self._model = model
+                return self._model
+
+            else:
+                raise ValueError(f"Unsupported backend: {self.backend}")
 
     def _get_dim(self) -> Optional[int]:
         if self.backend == "sentence-transformers":
@@ -139,7 +147,7 @@ class EmbeddingService:
 
         elif self.backend == "openai":
             client = self._get_model()
-            model_name = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+            model_name = settings.OPENAI_EMBED_MODEL or "text-embedding-3-small"
             resp = client.embeddings.create(model=model_name, input=texts)  # type: ignore
             vectors = [np.array(item.embedding, dtype=np.float32) for item in resp.data]  # type: ignore
             arr = np.vstack(vectors)

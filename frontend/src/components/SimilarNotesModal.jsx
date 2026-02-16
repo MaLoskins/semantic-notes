@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import apiService from '../services/api';
+import { cosineSimilarity } from '../utils/similarity';
 
 export default function SimilarNotesModal({
   isOpen = false,
@@ -37,7 +38,7 @@ export default function SimilarNotesModal({
           if (excludeIndex != null && i === excludeIndex) continue;
           const v = embs[i];
           if (!Array.isArray(v)) continue;
-          const score = apiService.cosineSimilarity(baseEmb, v);
+          const score = cosineSimilarity(baseEmb, v);
           scored.push({
             index: i,
             score,

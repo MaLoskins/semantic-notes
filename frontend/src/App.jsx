@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import AuthGuard from './components/AuthGuard';
+import ErrorBoundary from './components/ErrorBoundary';
 import NoteEditor from './components/NoteEditor';
 import NotesList from './components/NotesList';
 import GraphVisualization from './components/GraphVisualization';
 import { useNotes } from './hooks/useNotes';
-import apiService from './services/api';
-import './App.css';
+import { useConnectionStatus } from './hooks/useConnectionStatus';
+import { useDimensions } from './hooks/useDimensions';
+import { useGraph } from './hooks/useGraph';
+import { useSemanticSearch } from './hooks/useSemanticSearch';
+import { useUnsavedGuard } from './hooks/useUnsavedGuard';
+import './styles/index.css';
 import ImportConfirmModal from './components/ImportConfirmModal';
 import ToastNotification from './components/ToastNotification';
 import TrashView from './components/TrashView';
@@ -15,448 +20,74 @@ import SimilarNotesModal from './components/SimilarNotesModal';
 import ImportLocalNotesModal from './components/ImportLocalNotesModal';
 import MarkdownPreview from './components/MarkdownPreview';
 
-
-const GRAPH_UPDATE_DEBOUNCE = 500;
-const SEMANTIC_QUERY_DEBOUNCE = 500;
-const MIN_SEM_QUERY_LEN = 3;
-
-const GC_LS_KEY = 'graph-controls-prefs-v1';
-const DEFAULT_GRAPH_PARAMS = {
-  connection: 'knn',
-  k_neighbors: 5,
-  similarity_threshold: 0.7,
-  dim_reduction: 'pca',
-  clustering: null,
-  n_clusters: 5,
-};
-const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-
 export default function App() {
+  const { user, logout, isAuthenticated } = useAuth();
   const {
-    notes,
-    trashedNotes,
-    loading: notesLoading,
-    error: notesError,
-    addNote,
-    updateNote,
-    deleteNote,
-    moveToTrash,
-    restoreFromTrash,
-    permanentDelete,
-    emptyTrash,
-    getStats,
-    exportNotes,
-    importNotes
+    notes, trashedNotes, loading: notesLoading, error: notesError,
+    addNote, updateNote, moveToTrash, restoreFromTrash,
+    permanentDelete, emptyTrash, getStats, exportNotes, importNotes,
   } = useNotes();
+  const { connected, error, setError } = useConnectionStatus();
+  const {
+    searchMode, setSearchMode, searchTerm, setSearchTerm,
+    minSimilarity, setMinSimilarity,
+    semanticResults, semanticLoading, semanticError,
+  } = useSemanticSearch(notes, connected);
+  const {
+    isEditorDirty, setIsEditorDirty,
+    unsavedOpen, setUnsavedOpen,
+    pendingAction, setPendingAction,
+    guardedNavigate, cancelDialog,
+  } = useUnsavedGuard();
 
+  const graphRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const editorRef = useRef(null);
+
+  const { graphData, graphLoading, graphParams, handleControlsChange, handleControlsReset } =
+    useGraph(notes, connected, setError);
+  const dimensions = useDimensions(graphRef, { graphData, notesLength: notes.length });
+
+  // --- UI state ---
   const [selectedNote, setSelectedNote] = useState(null);
   const [editingNote, setEditingNote] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  // Search controls
-  const [searchMode, setSearchMode] = useState('text'); // 'text' | 'semantic'
-  const [minSimilarity, setMinSimilarity] = useState(60); // 0-100%
-  const [semanticResults, setSemanticResults] = useState([]); // [{index, score, percent}]
-  const [semanticLoading, setSemanticLoading] = useState(false);
-  const [semanticError, setSemanticError] = useState('');
-  const [graphData, setGraphData] = useState(null);
-  const [graphLoading, setGraphLoading] = useState(false);
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [activeTab, setActiveTab] = useState('notes');
   const [showImportModal, setShowImportModal] = useState(false);
   const [pendingImportedNotes, setPendingImportedNotes] = useState([]);
   const [successMessage, setSuccessMessage] = useState('');
- 
-  const [activeTab, setActiveTab] = useState('notes');
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [lastTrashedId, setLastTrashedId] = useState(null);
-
-  // Similar notes modal state
   const [similarOpen, setSimilarOpen] = useState(false);
   const [similarBaseDoc, setSimilarBaseDoc] = useState('');
   const [similarBaseTitle, setSimilarBaseTitle] = useState('');
   const [similarExcludeIndex, setSimilarExcludeIndex] = useState(null);
-  
-  const graphRef = useRef(null);
-  const updateTimerRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const editorRef = useRef(null);
-  const [isEditorDirty, setIsEditorDirty] = useState(false);
-  const [unsavedOpen, setUnsavedOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState(null);
-  const semanticTimerRef = useRef(null);
+  const [showImportLocalModal, setShowImportLocalModal] = useState(false);
 
-  // Graph controls (persisted)
-  const [graphParams, setGraphParams] = useState(() => {
-    try {
-      const raw = localStorage.getItem(GC_LS_KEY);
-      const parsed = raw ? JSON.parse(raw) : null;
-      return { ...DEFAULT_GRAPH_PARAMS, ...(parsed || {}) };
-    } catch {
-      return DEFAULT_GRAPH_PARAMS;
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(GC_LS_KEY, JSON.stringify(graphParams));
-    } catch { /* ignore quota */ }
-  }, [graphParams]);
-
-  const handleControlsChange = useCallback((partial) => {
-    setGraphParams((prev) => ({ ...prev, ...partial }));
-  }, []);
-
-  const handleControlsReset = useCallback(() => {
-    setGraphParams(DEFAULT_GRAPH_PARAMS);
-  }, []);
- 
-  // Check backend connection
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        await apiService.checkHealth();
-        setConnected(true);
-        setError(null);
-      } catch (err) {
-        setConnected(false);
-        setError('Backend unavailable. Ensure server is running on http://localhost:8000');
-      }
-    };
-
-    checkConnection();
-    const interval = setInterval(checkConnection, 10000);
-    return () => clearInterval(interval);
-  }, []);
- 
   // Auto-clear success messages
   useEffect(() => {
     if (!successMessage) return;
     const t = setTimeout(() => setSuccessMessage(''), 4000);
     return () => clearTimeout(t);
   }, [successMessage]);
- 
-  // Update dimensions on resize
+
+  // Check for local-storage notes on first authenticated load
   useEffect(() => {
-    const updateDimensions = () => {
-      if (graphRef.current) {
-        setDimensions({
-          width: graphRef.current.clientWidth,
-          height: graphRef.current.clientHeight
-        });
+    if (isAuthenticated && user) {
+      const hasCheckedImport = localStorage.getItem('import-checked');
+      if (!hasCheckedImport) {
+        const notesData = localStorage.getItem('semantic-notes-data');
+        const trashData = localStorage.getItem('semantic-notes-trash');
+        if (notesData || trashData) setShowImportLocalModal(true);
+        localStorage.setItem('import-checked', 'true');
       }
-    };
-
-    updateDimensions();
-    window.addEventListener('resize', updateDimensions);
-    return () => window.removeEventListener('resize', updateDimensions);
-  }, []);
-  
-  // Recalculate dimensions when graph data changes or notes length changes
-
-  useEffect(() => {
-  if (graphRef.current && (graphData || notes.length > 0)) {
-    // Small delay to ensure DOM has fully rendered and settled
-    const timer = setTimeout(() => {
-      if (graphRef.current) {
-        const newWidth = graphRef.current.clientWidth;
-        const newHeight = graphRef.current.clientHeight;
-        
-        // Only update if dimensions actually changed to avoid unnecessary re-renders
-        setDimensions(prev => {
-          if (prev.width !== newWidth || prev.height !== newHeight) {
-            return { width: newWidth, height: newHeight };
-          }
-          return prev;
-        });
-      }
-    }, 100);
-    
-    return () => clearTimeout(timer);
-  }
-}, [graphData, notes.length]);
-
-  // Generate graph with debouncing
-  useEffect(() => {
-    if (updateTimerRef.current) {
-      clearTimeout(updateTimerRef.current);
     }
+  }, [isAuthenticated, user]);
 
-    if (!connected || notes.length < 2) {
-      setGraphData(null);
-      return;
-    }
+  // --- Navigation / unsaved-guard helpers ---
+  const editingActive = isCreating || !!editingNote;
 
-    updateTimerRef.current = setTimeout(async () => {
-      setGraphLoading(true);
-      try {
-        const documents = notes.map(note =>
-          `${note.title}. ${note.content} ${note.tags || ''}`
-        );
-        
-        const labels = notes.map(note =>
-          note.title.length > 30 ? `${note.title.substring(0, 30)}...` : note.title
-        );
-
-        const connection = graphParams.connection === 'threshold' ? 'threshold' : 'knn';
-        const kNeighborsRaw = clamp(parseInt(graphParams.k_neighbors ?? 5, 10), 1, 10);
-        const kNeighbors = Math.min(kNeighborsRaw, Math.max(1, notes.length - 1));
-        const similarity_threshold = Math.max(0, Math.min(1, Number(graphParams.similarity_threshold ?? 0.7)));
-        const dim_reduction = graphParams.dim_reduction === 'none' ? null : (graphParams.dim_reduction ?? 'pca');
-        const clustering = graphParams.clustering ?? null;
-        const n_clusters = clustering ? clamp(parseInt(graphParams.n_clusters ?? 5, 10), 2, 20) : undefined;
-
-        const graph = await apiService.buildGraph({
-          documents,
-          labels,
-          connection,
-          k_neighbors: connection === 'knn' ? kNeighbors : undefined,
-          similarity_threshold: connection === 'threshold' ? similarity_threshold : undefined,
-          dim_reduction,
-          clustering,
-          n_clusters,
-        });
-
-        setGraphData(graph);
-        setError(null);
-      } catch (err) {
-        console.error('Graph generation failed:', err);
-        setError(`Graph generation failed: ${err.message}`);
-      } finally {
-        setGraphLoading(false);
-      }
-    }, GRAPH_UPDATE_DEBOUNCE);
-
-    return () => {
-      if (updateTimerRef.current) {
-        clearTimeout(updateTimerRef.current);
-      }
-    };
-  }, [notes, connected, graphParams]);
-
-  // Semantic Search (debounced)
-  useEffect(() => {
-    if (searchMode !== 'semantic') {
-      setSemanticLoading(false);
-      setSemanticError('');
-      setSemanticResults([]);
-      return;
-    }
-    const q = String(searchTerm || '').trim();
-    if (!q) {
-      setSemanticResults([]);
-      setSemanticLoading(false);
-      setSemanticError('');
-      return;
-    }
-    if (q.length < MIN_SEM_QUERY_LEN) {
-      setSemanticResults([]);
-      setSemanticLoading(false);
-      setSemanticError(`Type at least ${MIN_SEM_QUERY_LEN} characters for semantic search`);
-      return;
-    }
-    if (!connected) {
-      setSemanticResults([]);
-      setSemanticLoading(false);
-      setSemanticError('Semantic search requires backend connection');
-      return;
-    }
-
-    if (semanticTimerRef.current) {
-      clearTimeout(semanticTimerRef.current);
-    }
-    let cancelled = false;
-    semanticTimerRef.current = setTimeout(async () => {
-      setSemanticLoading(true);
-      setSemanticError('');
-      try {
-        const [noteEmbs, queryEmb] = await Promise.all([
-          apiService.getEmbeddingsForNotes(notes),
-          apiService.embedText(q),
-        ]);
-        const scored = [];
-        for (let i = 0; i < notes.length; i++) {
-          const v = noteEmbs[i];
-          if (!Array.isArray(v)) continue;
-          const s = apiService.cosineSimilarity(queryEmb, v);
-          scored.push({ index: i, score: s, percent: Math.round(s * 100) });
-        }
-        scored.sort((a, b) => b.score - a.score);
-        if (!cancelled) setSemanticResults(scored);
-      } catch (e) {
-        console.error('Semantic search failed:', e);
-        if (!cancelled) setSemanticError(e?.message || 'Semantic search failed');
-      } finally {
-        if (!cancelled) setSemanticLoading(false);
-      }
-    }, SEMANTIC_QUERY_DEBOUNCE);
-
-    return () => {
-      cancelled = true;
-      if (semanticTimerRef.current) clearTimeout(semanticTimerRef.current);
-    };
-  }, [searchMode, searchTerm, notes, connected]);
-
-  const handleSaveNote = useCallback((noteData) => {
-    if (editingNote) {
-      updateNote(editingNote.originalIndex, noteData);
-      setEditingNote(null);
-    } else {
-      addNote(noteData);
-      setIsCreating(false);
-    }
-  }, [editingNote, updateNote, addNote]);
-
-  const handleEditNote = useCallback((index) => {
-    // If there are unsaved changes in the current editor, prompt first
-    setSelectedNote(prev => prev); // no-op to keep dependencies minimal
-    const action = { type: 'edit', index };
-    const editingActive = isCreating || !!editingNote;
-    if (editingActive && isEditorDirty) {
-      setPendingAction(action);
-      setUnsavedOpen(true);
-    } else {
-      setEditingNote({ ...notes[index], originalIndex: index });
-      setIsCreating(false);
-      setSelectedNote(null);
-    }
-  }, [notes, isCreating, editingNote, isEditorDirty]);
-
-  const handleDeleteNote = useCallback((index) => {
-    const moved = moveToTrash(index);
-    if (moved) {
-      setLastTrashedId(moved.id);
-      setToastMessage('Note moved to trash. Undo?');
-      setToastOpen(true);
-    }
-    if (selectedNote === index) setSelectedNote(null);
-  }, [moveToTrash, selectedNote]);
-
-  const handleUndo = useCallback(() => {
-    if (lastTrashedId != null) {
-      restoreFromTrash(lastTrashedId);
-      setLastTrashedId(null);
-    }
-  }, [lastTrashedId, restoreFromTrash]);
-
-  const handleNodeClick = useCallback((nodeId) => {
-    const action = { type: 'nodeSelect', index: nodeId };
-    const editingActive = isCreating || !!editingNote;
-    if (editingActive && isEditorDirty) {
-      setPendingAction(action);
-      setUnsavedOpen(true);
-    } else {
-      setSelectedNote(nodeId);
-      setEditingNote(null);
-      setIsCreating(false);
-    }
-  }, [isCreating, editingNote, isEditorDirty]);
-
-  const handleNewNote = useCallback(() => {
-    const action = { type: 'new' };
-    const editingActive = isCreating || !!editingNote;
-    if (editingActive && isEditorDirty) {
-      setPendingAction(action);
-      setUnsavedOpen(true);
-    } else {
-      setIsCreating(true);
-      setEditingNote(null);
-      setSelectedNote(null);
-    }
-  }, [isCreating, editingNote, isEditorDirty]);
-
-  const handleCancel = useCallback(() => {
-    const editingActive = isCreating || !!editingNote;
-    if (editingActive && isEditorDirty) {
-      setPendingAction({ type: 'cancel' });
-      setUnsavedOpen(true);
-    } else {
-      setIsCreating(false);
-      setEditingNote(null);
-    }
-  }, [isCreating, editingNote, isEditorDirty]);
- 
-  const handleImportClick = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
- 
-  const handleFileSelected = useCallback((e) => {
-    try {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-      if (!file.name.toLowerCase().endsWith('.json')) {
-        setError('Please select a JSON file');
-        e.target.value = '';
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const text = String(reader.result || '');
-          const parsed = JSON.parse(text);
-          const incoming = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.notes) ? parsed.notes : null);
-          if (!incoming) {
-            throw new Error('Invalid file format. Expected { "notes": [...] }');
-          }
-          if (!Array.isArray(incoming)) {
-            throw new Error('Invalid notes format in file');
-          }
-          if (incoming.length === 0) {
-            setError('No notes found in file');
-            e.target.value = '';
-            return;
-          }
-          setPendingImportedNotes(incoming);
-          setShowImportModal(true);
-          setError(null);
-        } catch (err) {
-          console.error('Import parse error:', err);
-          setError(`Import failed: ${err.message}`);
-        } finally {
-          e.target.value = '';
-        }
-      };
-      reader.onerror = () => {
-        setError('Failed to read file');
-        e.target.value = '';
-      };
-      reader.readAsText(file);
-    } catch (err) {
-      setError(`Import failed: ${err.message}`);
-      if (e?.target) e.target.value = '';
-    }
-  }, []);
- 
-  const confirmReplace = useCallback(() => {
-    try {
-      const res = importNotes(pendingImportedNotes, 'replace');
-      setSuccessMessage(`Imported ${res.imported} notes successfully`);
-    } catch (err) {
-      setError(`Import failed: ${err.message}`);
-    } finally {
-      setShowImportModal(false);
-      setPendingImportedNotes([]);
-      setSelectedNote(null);
-      setEditingNote(null);
-      setIsCreating(false);
-    }
-  }, [importNotes, pendingImportedNotes]);
- 
-  const confirmMerge = useCallback(() => {
-    try {
-      const res = importNotes(pendingImportedNotes, 'merge');
-      setSuccessMessage(`Imported ${res.imported} notes successfully`);
-    } catch (err) {
-      setError(`Import failed: ${err.message}`);
-    } finally {
-      setShowImportModal(false);
-      setPendingImportedNotes([]);
-    }
-  }, [importNotes, pendingImportedNotes]);
- 
-  // Navigation helpers that respect unsaved changes
   const executeAction = useCallback((action) => {
     if (!action) return;
     switch (action.type) {
@@ -495,22 +126,141 @@ export default function App() {
         break;
     }
   }, [notes]);
-  
+
   const requestNavigate = useCallback((action) => {
-    const editingActive = isCreating || !!editingNote;
-    if (editingActive && isEditorDirty) {
-      setPendingAction(action);
-      setUnsavedOpen(true);
-    } else {
+    if (guardedNavigate(action, editingActive)) {
       executeAction(action);
     }
-  }, [isCreating, editingNote, isEditorDirty, executeAction]);
-  
+  }, [editingActive, guardedNavigate, executeAction]);
+
+  // --- Event handlers ---
+  const handleSaveNote = useCallback((noteData) => {
+    if (editingNote) {
+      updateNote(editingNote.originalIndex, noteData);
+      setEditingNote(null);
+    } else {
+      addNote(noteData);
+      setIsCreating(false);
+    }
+  }, [editingNote, updateNote, addNote]);
+
+  const handleEditNote = useCallback((index) => {
+    requestNavigate({ type: 'edit', index });
+  }, [requestNavigate]);
+
+  const handleDeleteNote = useCallback((index) => {
+    const moved = moveToTrash(index);
+    if (moved) {
+      setLastTrashedId(moved.id);
+      setToastMessage('Note moved to trash. Undo?');
+      setToastOpen(true);
+    }
+    if (selectedNote === index) setSelectedNote(null);
+  }, [moveToTrash, selectedNote]);
+
+  const handleUndo = useCallback(() => {
+    if (lastTrashedId != null) {
+      restoreFromTrash(lastTrashedId);
+      setLastTrashedId(null);
+    }
+  }, [lastTrashedId, restoreFromTrash]);
+
+  const handleNodeClick = useCallback((nodeId) => {
+    requestNavigate({ type: 'nodeSelect', index: nodeId });
+  }, [requestNavigate]);
+
+  const handleNewNote = useCallback(() => {
+    requestNavigate({ type: 'new' });
+  }, [requestNavigate]);
+
+  const handleCancel = useCallback(() => {
+    requestNavigate({ type: 'cancel' });
+  }, [requestNavigate]);
+
   const handleTabChange = useCallback((tab) => {
     requestNavigate({ type: 'tab', tab });
   }, [requestNavigate]);
 
-  // ---------- Find Similar Notes helpers ----------
+  // --- Import / export ---
+  const handleImportClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelected = useCallback((e) => {
+    try {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.json')) {
+        setError('Please select a JSON file');
+        e.target.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || '');
+          const parsed = JSON.parse(text);
+          const incoming = Array.isArray(parsed)
+            ? parsed
+            : (parsed && Array.isArray(parsed.notes) ? parsed.notes : null);
+          if (!incoming) throw new Error('Invalid file format. Expected { "notes": [...] }');
+          if (!Array.isArray(incoming)) throw new Error('Invalid notes format in file');
+          if (incoming.length === 0) {
+            setError('No notes found in file');
+            e.target.value = '';
+            return;
+          }
+          setPendingImportedNotes(incoming);
+          setShowImportModal(true);
+          setError(null);
+        } catch (err) {
+          console.error('Import parse error:', err);
+          setError(`Import failed: ${err.message}`);
+        } finally {
+          e.target.value = '';
+        }
+      };
+      reader.onerror = () => {
+        setError('Failed to read file');
+        e.target.value = '';
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+      if (e?.target) e.target.value = '';
+    }
+  }, [setError]);
+
+  const confirmReplace = useCallback(() => {
+    try {
+      const res = importNotes(pendingImportedNotes, 'replace');
+      setSuccessMessage(`Imported ${res.imported} notes successfully`);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    } finally {
+      setShowImportModal(false);
+      setPendingImportedNotes([]);
+      setSelectedNote(null);
+      setEditingNote(null);
+      setIsCreating(false);
+    }
+  }, [importNotes, pendingImportedNotes, setError]);
+
+  const confirmMerge = useCallback(() => {
+    try {
+      const res = importNotes(pendingImportedNotes, 'merge');
+      setSuccessMessage(`Imported ${res.imported} notes successfully`);
+    } catch (err) {
+      setError(`Import failed: ${err.message}`);
+    } finally {
+      setShowImportModal(false);
+      setPendingImportedNotes([]);
+    }
+  }, [importNotes, pendingImportedNotes, setError]);
+
+  // --- Similar notes ---
+  const LINKS_KEY = 'semantic-links-v1';
+
   const buildDocText = useCallback((n) => {
     const t = String(n?.title || '').trim();
     const c = String(n?.content || '').trim();
@@ -532,24 +282,19 @@ export default function App() {
     } else if (editingNote) {
       data = editingNote;
     }
-    if (!data) {
-      setError('No note data to analyze');
-      return;
-    }
+    if (!data) { setError('No note data to analyze'); return; }
     const doc = buildDocText(data);
     const title = String(data.title || 'This note');
     const exclude = editingNote?.originalIndex ?? null;
     openSimilar(doc, title, exclude);
-  }, [editorRef, editingNote, buildDocText, openSimilar]);
+  }, [editorRef, editingNote, buildDocText, openSimilar, setError]);
 
   const handleFindSimilarFromList = useCallback((index) => {
     const n = notes[index];
     if (!n) return;
-    const doc = buildDocText(n);
-    openSimilar(doc, n.title || 'This note', index);
+    openSimilar(buildDocText(n), n.title || 'This note', index);
   }, [notes, buildDocText, openSimilar]);
 
-  const LINKS_KEY = 'semantic-links-v1';
   const addLink = useCallback((aId, bId) => {
     try {
       if (aId == null || bId == null) {
@@ -566,77 +311,38 @@ export default function App() {
     } catch (e) {
       setError('Failed to save link');
     }
-  }, []);
- 
+  }, [setError]);
+
+  // --- Unsaved-changes dialog handlers ---
   const saveAndContinue = useCallback(() => {
     if (!editorRef.current) return;
     const data = editorRef.current.getCurrentData();
     const titleOk = String(data.title || '').trim().length > 0;
     const contentOk = String(data.content || '').trim().length > 0;
-    if (!titleOk || !contentOk) {
-      alert('Title and Content are required');
-      return;
-    }
+    if (!titleOk || !contentOk) { alert('Title and Content are required'); return; }
     handleSaveNote(data);
     setUnsavedOpen(false);
-    if (pendingAction) {
-      executeAction(pendingAction);
-      setPendingAction(null);
-    }
-  }, [handleSaveNote, pendingAction, executeAction]);
-  
+    if (pendingAction) { executeAction(pendingAction); setPendingAction(null); }
+  }, [handleSaveNote, pendingAction, executeAction, setUnsavedOpen, setPendingAction]);
+
   const discardChanges = useCallback(() => {
     setUnsavedOpen(false);
-    // Close the editor and proceed
     setIsCreating(false);
     setEditingNote(null);
-    if (pendingAction) {
-      executeAction(pendingAction);
-      setPendingAction(null);
-    }
-  }, [pendingAction, executeAction]);
-  
-  const cancelDialog = useCallback(() => {
-    setUnsavedOpen(false);
-  }, []);
-  
+    if (pendingAction) { executeAction(pendingAction); setPendingAction(null); }
+  }, [pendingAction, executeAction, setUnsavedOpen, setPendingAction]);
+
+  const handleImportComplete = () => { setShowImportLocalModal(false); window.location.reload(); };
+  const handleImportSkip = () => { setShowImportLocalModal(false); };
   const stats = getStats();
 
-  const { user, logout, isAuthenticated } = useAuth();
-
-   // LocalStorage import modal logic
-   const [showImportLocalModal, setShowImportLocalModal] = useState(false);
-   useEffect(() => {
-     if (isAuthenticated && user) {
-       const hasCheckedImport = localStorage.getItem('import-checked');
-       if (!hasCheckedImport) {
-         const notesData = localStorage.getItem('semantic-notes-data');
-         const trashData = localStorage.getItem('semantic-notes-trash');
-         if (notesData || trashData) {
-           setShowImportLocalModal(true);
-         }
-         localStorage.setItem('import-checked', 'true');
-       }
-     }
-   }, [isAuthenticated, user]);
-
-   const handleImportComplete = (importedCount) => {
-     setShowImportLocalModal(false);
-     window.location.reload();
-   };
-
-   const handleImportSkip = () => {
-     setShowImportLocalModal(false);
-   };
-
+  // --- Render ---
   return (
     <AuthGuard>
-       {showImportLocalModal && (
-         <ImportLocalNotesModal
-           onClose={handleImportSkip}
-           onImportComplete={handleImportComplete}
-         />
-       )}
+      <ErrorBoundary>
+      {showImportLocalModal && (
+        <ImportLocalNotesModal onClose={handleImportSkip} onImportComplete={handleImportComplete} />
+      )}
       <div className="app">
         <header className="app-header">
         <h1>Semantic Notes</h1>
@@ -841,22 +547,24 @@ export default function App() {
               <div>Generating semantic graph...</div>
             </div>
           ) : graphData ? (
-            <GraphVisualization
-              graphData={graphData}
-              onNodeClick={handleNodeClick}
-              selectedNote={selectedNote}
-              width={dimensions.width}
-              height={dimensions.height}
-              controlsParams={graphParams}
-              onControlsChange={handleControlsChange}
-              onControlsReset={handleControlsReset}
-              stats={{
-                nodes: graphData?.nodes?.length || 0,
-                edges: graphData?.edges?.length || 0
-              }}
-              loading={graphLoading}
-              panelPosition="bottom-left"
-            />
+            <ErrorBoundary>
+              <GraphVisualization
+                graphData={graphData}
+                onNodeClick={handleNodeClick}
+                selectedNote={selectedNote}
+                width={dimensions.width}
+                height={dimensions.height}
+                controlsParams={graphParams}
+                onControlsChange={handleControlsChange}
+                onControlsReset={handleControlsReset}
+                stats={{
+                  nodes: graphData?.nodes?.length || 0,
+                  edges: graphData?.edges?.length || 0
+                }}
+                loading={graphLoading}
+                panelPosition="bottom-left"
+              />
+            </ErrorBoundary>
           ) : (
             <div className="empty-state">
               <p>Unable to generate graph. Check connection.</p>
@@ -934,6 +642,7 @@ export default function App() {
         onCancel={cancelDialog}
       />
     </div>
+    </ErrorBoundary>
     </AuthGuard>
   );
 }

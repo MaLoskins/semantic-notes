@@ -1,23 +1,15 @@
-import os
 import time
 import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
-
-# Get database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set in the environment (.env)")
+from config import settings
 
 # Create SQLAlchemy engine
 engine = create_engine(
-    DATABASE_URL,
+    settings.DATABASE_URL,
     pool_pre_ping=True,
     pool_size=15,
     max_overflow=30,
@@ -55,9 +47,10 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
-    except Exception as e:
+        db.commit()
+    except Exception:
         db.rollback()
-        raise e
+        raise
     finally:
         db.close()
 
